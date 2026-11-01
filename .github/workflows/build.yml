@@ -207,8 +207,48 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="12dp"
-                      android:text="Escolha um vídeo baixado no celular. O app escuta o áudio do arquivo, reconhece o tailandês, traduz para inglês e mostra o vídeo com as legendas. Também salva arquivos .srt na pasta Downloads/LegendasTH.\n\nNão usa microfone nem grava a tela. Tudo roda no aparelho."
+                      android:text="Escolha um vídeo ou áudio baixado no celular. O app reconhece o tailandês do arquivo, traduz para inglês e mostra com as legendas. Também salva arquivos .srt na pasta Downloads/LegendasTH.\n\nNão usa microfone nem grava a tela. Tudo roda no aparelho."
                       android:textSize="15sp" />
+
+                  <TextView
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="20dp"
+                      android:text="Opções"
+                      android:textSize="16sp"
+                      android:textStyle="bold" />
+
+                  <RadioGroup
+                      android:id="@+id/rgQuality"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="4dp"
+                      android:orientation="vertical">
+
+                      <RadioButton
+                          android:id="@+id/rbSmall"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:text="Preciso: Whisper small (cerca de 375 MB). Acerta mais, é mais lento." />
+
+                      <RadioButton
+                          android:id="@+id/rbBase"
+                          android:layout_width="match_parent"
+                          android:layout_height="wrap_content"
+                          android:text="Rápido: Whisper base (cerca de 160 MB). Bem mais leve, mas erra mais em tailandês." />
+                  </RadioGroup>
+
+                  <CheckBox
+                      android:id="@+id/cbPack"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="Agrupar falas curtas: bem mais rápido e dá mais contexto ao modelo; a sincronia de cada frase fica aproximada." />
+
+                  <CheckBox
+                      android:id="@+id/cbDenoise"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:text="Reduzir ruído antes de reconhecer (modelo pequeno). Ajuda com chiado e ruído de fundo, mas pode piorar em alguns arquivos: teste os dois." />
 
                   <TextView
                       android:id="@+id/tvStatus"
@@ -232,14 +272,14 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="20dp"
-                      android:text="1. Baixar modelos (cerca de 380 MB, uma vez)" />
+                      android:text="1. Baixar os modelos escolhidos (uma vez)" />
 
                   <Button
                       android:id="@+id/btnPick"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="8dp"
-                      android:text="2. Escolher vídeo e gerar legendas" />
+                      android:text="2. Escolher vídeo ou áudio e gerar legendas" />
 
                   <Button
                       android:id="@+id/btnCancel"
@@ -488,6 +528,168 @@ jobs:
               }
           }
           LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/Packing.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/Packing.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          /**
+           * O Whisper sempre analisa uma janela de 30 s, mesmo que a fala tenha só 2 s.
+           * Agrupar falas curtas vizinhas numa janela só reduz muito o número de análises
+           * (e dá mais contexto ao modelo). Estas regras decidem quando uma fala entra no grupo.
+           */
+          object Packing {
+              const val RATE = 16_000
+              const val PAD = 4_800                 // 0,3 s de silêncio colocado entre falas agrupadas
+              const val MAX_WINDOW = 24 * RATE      // o Whisper lê no máximo 30 s por vez
+              const val MAX_GAP = 4 * RATE          // pausa maior que 4 s encerra o grupo
+
+              /** [windowSamples] já inclui os silêncios de ligação do grupo atual. */
+              fun canJoin(prevEnd: Int, windowSamples: Int, nextStart: Int, nextLen: Int): Boolean {
+                  if (nextStart - prevEnd > MAX_GAP) return false
+                  return windowSamples + PAD + nextLen <= MAX_WINDOW
+              }
+          }
+
+          object TextSplit {
+              /**
+               * Reparte [text] em partes proporcionais aos [weights], cortando no espaço mais próximo
+               * quando houver. Usado para distribuir o texto de uma janela agrupada entre as falas dela.
+               */
+              fun proportional(text: String, weights: List<Double>): List<String> {
+                  val n = weights.size
+                  val t = text.trim()
+                  if (n <= 1) return listOf(t)
+                  if (t.isEmpty()) return List(n) { "" }
+                  val total = weights.sum()
+                  if (total <= 0.0) return List(n) { i -> if (i == 0) t else "" }
+
+                  val cuts = IntArray(n - 1)
+                  var cum = 0.0
+                  var prev = 0
+                  for (i in 0 until n - 1) {
+                      cum += weights[i]
+                      var pos = Math.round(t.length * cum / total).toInt().coerceIn(prev, t.length)
+                      pos = snap(t, pos, prev)
+                      cuts[i] = pos
+                      prev = pos
+                  }
+                  val out = ArrayList<String>()
+                  var start = 0
+                  for (i in 0 until n - 1) {
+                      out.add(t.substring(start, cuts[i]).trim())
+                      start = cuts[i]
+                  }
+                  out.add(t.substring(start).trim())
+                  return out
+              }
+
+              private fun snap(t: String, pos: Int, min: Int): Int {
+                  if (pos <= min || pos >= t.length) return pos
+                  val range = maxOf(6, t.length / 8)
+                  for (d in 0..range) {
+                      val left = pos - d
+                      if (left > min && left < t.length && t[left].isWhitespace()) return left
+                      val right = pos + d
+                      if (right > min && right < t.length && t[right].isWhitespace()) return right
+                  }
+                  return pos
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/BlockDenoiser.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/BlockDenoiser.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          /**
+           * Aplica um redutor de ruído em blocos de 20 s, para não carregar o áudio inteiro na memória.
+           * Cada bloco recebe 1 s do áudio anterior como "aquecimento" (descartado na saída),
+           * o que evita falhas na emenda entre blocos.
+           *
+           * [process] recebe um trecho e devolve o trecho com ruído reduzido (taxa 16 kHz).
+           * [sink] recebe o áudio já processado, na ordem.
+           */
+          class BlockDenoiser(
+              private val process: (FloatArray) -> FloatArray,
+              private val sink: (FloatArray, Int) -> Unit
+          ) {
+              private val blockLen = 20 * AudioDecoder.OUT_RATE
+              private val ctxLen = AudioDecoder.OUT_RATE
+              private val pending = FloatArray(blockLen)
+              private var n = 0
+              private var tail = FloatArray(0)
+
+              fun push(samples: FloatArray, count: Int) {
+                  var off = 0
+                  while (off < count) {
+                      val take = minOf(count - off, blockLen - n)
+                      System.arraycopy(samples, off, pending, n, take)
+                      n += take
+                      off += take
+                      if (n == blockLen) run()
+                  }
+              }
+
+              fun finish() {
+                  if (n > 0) run()
+              }
+
+              private fun run() {
+                  val newLen = n
+                  val input = FloatArray(tail.size + newLen)
+                  System.arraycopy(tail, 0, input, 0, tail.size)
+                  System.arraycopy(pending, 0, input, tail.size, newLen)
+
+                  val out = process(input)
+
+                  // Pega o final do resultado (a parte nova). Se o modelo devolver um pouco mais ou menos
+                  // amostras que o esperado, o alinhamento pelo final mantém o erro abaixo de alguns ms.
+                  val result = FloatArray(newLen)
+                  if (out.size >= newLen) {
+                      System.arraycopy(out, out.size - newLen, result, 0, newLen)
+                  } else {
+                      System.arraycopy(out, 0, result, newLen - out.size, out.size)
+                  }
+                  sink(result, newLen)
+
+                  tail = pending.copyOfRange(maxOf(0, newLen - ctxLen), newLen)
+                  n = 0
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/Prefs.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/Prefs.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          import android.content.Context
+
+          /** Escolhas do usuário na tela principal, guardadas no aparelho. */
+          object Prefs {
+              private const val FILE = "opcoes"
+
+              private fun p(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+
+              fun quality(context: Context): Quality =
+                  if (p(context).getString("modelo", "small") == "base") Quality.BASE else Quality.SMALL
+
+              fun setQuality(context: Context, q: Quality) {
+                  p(context).edit().putString("modelo", q.key).apply()
+              }
+
+              /** Agrupar falas curtas (mais rápido). Ligado por padrão. */
+              fun pack(context: Context): Boolean = p(context).getBoolean("agrupar", true)
+
+              fun setPack(context: Context, value: Boolean) {
+                  p(context).edit().putBoolean("agrupar", value).apply()
+              }
+
+              /** Reduzir ruído antes de reconhecer. Desligado por padrão. */
+              fun denoise(context: Context): Boolean = p(context).getBoolean("ruido", false)
+
+              fun setDenoise(context: Context, value: Boolean) {
+                  p(context).edit().putBoolean("ruido", value).apply()
+              }
+          }
+          LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/AudioDecoder.kt')"
           cat > 'app/src/main/java/com/example/legendasth/AudioDecoder.kt' <<'LEGENDAS_EOF_END'
           package com.example.legendasth
@@ -552,7 +754,8 @@ jobs:
                   uri: Uri,
                   isCancelled: () -> Boolean,
                   onProgress: (Float) -> Unit,
-                  onSamples: (FloatArray, Int) -> Unit
+                  onSamples: (FloatArray, Int) -> Unit,
+                  onDuration: (Long) -> Unit = {}
               ) {
                   val extractor = MediaExtractor()
                   var codec: MediaCodec? = null
@@ -576,6 +779,8 @@ jobs:
                       val mime = format.getString(MediaFormat.KEY_MIME) ?: throw NoAudioException()
                       val durationUs =
                           if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
+
+                      if (durationUs > 0) onDuration(durationUs / 1000)
 
                       val c = MediaCodec.createDecoderByType(mime)
                       codec = c
@@ -678,54 +883,85 @@ jobs:
           import java.net.HttpURLConnection
           import java.net.URL
 
-          /** Baixa os modelos: Whisper "small" (voz), detector de fala Silero e o dicionário de tokens. */
+          /** Tamanhos de modelo do Whisper. "small" acerta mais; "base" é bem mais leve e rápido. */
+          enum class Quality(val key: String, val encoderMin: Long, val decoderMin: Long) {
+              SMALL("small", 100_000_000L, 250_000_000L),
+              BASE("base", 25_000_000L, 120_000_000L)
+          }
+
+          /**
+           * Baixa os modelos: Whisper (voz), detector de fala Silero, dicionário de tokens
+           * e, se o usuário quiser, o redutor de ruído GTCRN.
+           * Cada tamanho de Whisper fica na sua pasta: filesDir/whisper-small ou filesDir/whisper-base.
+           */
           object ModelManager {
 
-              const val ENCODER = "small-encoder.int8.onnx"
-              const val DECODER = "small-decoder.int8.onnx"
-              const val TOKENS = "small-tokens.txt"
               const val VAD = "silero_vad.onnx"
+              const val DENOISER = "gtcrn_simple.onnx"
 
               private const val OK = ".ok"
-              private const val WHISPER_BASE =
-                  "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/"
               private const val VAD_URL =
                   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+              private const val DENOISER_URL =
+                  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speech-enhancement-models/gtcrn_simple.onnx"
+              private const val DENOISER_MIN = 20_000L
 
-              private class Item(val name: String, val url: String, val label: String, val minBytes: Long)
+              fun dir(context: Context, q: Quality): File = File(context.filesDir, "whisper-" + q.key)
+              fun encoder(context: Context, q: Quality): File = File(dir(context, q), q.key + "-encoder.int8.onnx")
+              fun decoder(context: Context, q: Quality): File = File(dir(context, q), q.key + "-decoder.int8.onnx")
+              fun tokens(context: Context, q: Quality): File = File(dir(context, q), q.key + "-tokens.txt")
+              fun vad(context: Context, q: Quality): File = File(dir(context, q), VAD)
+              fun denoiser(context: Context, q: Quality): File = File(dir(context, q), DENOISER)
 
-              private val items = listOf(
-                  Item(VAD, VAD_URL, "detector de fala", 500_000L),
-                  Item(TOKENS, WHISPER_BASE + TOKENS, "dicionário", 500_000L),
-                  Item(ENCODER, WHISPER_BASE + ENCODER, "modelo de voz (parte 1)", 100_000_000L),
-                  Item(DECODER, WHISPER_BASE + DECODER, "modelo de voz (parte 2)", 250_000_000L)
-              )
+              private fun denoiserOk(context: Context, q: Quality): Boolean {
+                  val f = denoiser(context, q)
+                  return f.exists() && f.length() >= DENOISER_MIN
+              }
 
-              fun dir(context: Context): File = File(context.filesDir, "whisper-small")
+              fun ready(context: Context, q: Quality, denoise: Boolean): Boolean =
+                  File(dir(context, q), OK).exists() && (!denoise || denoiserOk(context, q))
 
-              fun ready(context: Context): Boolean = File(dir(context), OK).exists()
+              private class Item(val file: File, val url: String, val label: String, val minBytes: Long)
 
-              /** Baixa tudo que falta. Se a conexão cair, a próxima tentativa continua de onde parou. */
-              fun download(context: Context, onProgress: (String, Int) -> Unit) {
-                  val dir = dir(context)
+              private fun items(context: Context, q: Quality, denoise: Boolean): List<Item> {
+                  val base = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-" + q.key + "/resolve/main/"
+                  val list = ArrayList<Item>()
+                  list.add(Item(vad(context, q), VAD_URL, "detector de fala", 500_000L))
+                  if (denoise) list.add(Item(denoiser(context, q), DENOISER_URL, "redutor de ruído", DENOISER_MIN))
+                  list.add(Item(tokens(context, q), base + tokens(context, q).name, "dicionário", 500_000L))
+                  list.add(Item(encoder(context, q), base + encoder(context, q).name, "modelo de voz (parte 1)", q.encoderMin))
+                  list.add(Item(decoder(context, q), base + decoder(context, q).name, "modelo de voz (parte 2)", q.decoderMin))
+                  return list
+              }
+
+              /** Baixa o que falta. Se a conexão cair, a próxima tentativa continua de onde parou. */
+              fun download(context: Context, q: Quality, denoise: Boolean, onProgress: (String, Int) -> Unit) {
+                  val dir = dir(context, q)
                   dir.mkdirs()
-                  if (dir.usableSpace < 450_000_000L) {
-                      throw IOException("Pouco espaço livre no celular (precisa de cerca de 450 MB).")
+                  val items = items(context, q, denoise)
+
+                  var missing = 0L
+                  for (item in items) {
+                      if (!(item.file.exists() && item.file.length() >= item.minBytes)) missing += item.minBytes
                   }
+                  if (dir.usableSpace < missing + missing / 10) {
+                      throw IOException("Pouco espaço livre no celular (precisa de cerca de ${missing / 1_000_000 + 20} MB).")
+                  }
+
                   for ((index, item) in items.withIndex()) {
                       val title = "Baixando ${item.label} (${index + 1}/${items.size})"
-                      fetch(item, dir) { pct -> onProgress(title, pct) }
+                      fetch(item) { pct -> onProgress(title, pct) }
                   }
                   File(dir, OK).writeText("ok")
               }
 
-              private fun fetch(item: Item, dir: File, onPercent: (Int) -> Unit) {
-                  val target = File(dir, item.name)
+              private fun fetch(item: Item, onPercent: (Int) -> Unit) {
+                  val target = item.file
                   if (target.exists() && target.length() >= item.minBytes) {
                       onPercent(100)
                       return
                   }
-                  val part = File(dir, item.name + ".part")
+                  val part = File(target.path + ".part")
                   val have = if (part.exists()) part.length() else 0L
 
                   val conn = URL(item.url).openConnection() as HttpURLConnection
@@ -749,6 +985,7 @@ jobs:
                       }
                       416 -> {
                           if (have >= item.minBytes) {
+                              target.delete()
                               part.renameTo(target)
                               onPercent(100)
                               return
@@ -756,7 +993,7 @@ jobs:
                           part.delete()
                           throw IOException("Download interrompido. Toque em baixar de novo.")
                       }
-                      else -> throw IOException("Falha ao baixar ${item.name} (HTTP $code)")
+                      else -> throw IOException("Falha ao baixar ${target.name} (HTTP $code)")
                   }
 
                   var done = if (append) have else 0L
@@ -782,14 +1019,14 @@ jobs:
                   conn.disconnect()
 
                   if (total > 0 && part.length() < total) {
-                      throw IOException("Download incompleto de ${item.name}. Toque em baixar de novo.")
+                      throw IOException("Download incompleto de ${target.name}. Toque em baixar de novo.")
                   }
                   if (part.length() < item.minBytes) {
                       part.delete()
-                      throw IOException("Arquivo ${item.name} veio incompleto. Toque em baixar de novo.")
+                      throw IOException("Arquivo ${target.name} veio incompleto. Toque em baixar de novo.")
                   }
                   target.delete()
-                  if (!part.renameTo(target)) throw IOException("Não foi possível salvar ${item.name}")
+                  if (!part.renameTo(target)) throw IOException("Não foi possível salvar ${target.name}")
                   onPercent(100)
               }
           }
@@ -809,36 +1046,47 @@ jobs:
           import com.k2fsa.sherpa.onnx.OfflineModelConfig
           import com.k2fsa.sherpa.onnx.OfflineRecognizer
           import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+          import com.k2fsa.sherpa.onnx.OfflineSpeechDenoiser
+          import com.k2fsa.sherpa.onnx.OfflineSpeechDenoiserConfig
+          import com.k2fsa.sherpa.onnx.OfflineSpeechDenoiserGtcrnModelConfig
+          import com.k2fsa.sherpa.onnx.OfflineSpeechDenoiserModelConfig
           import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
           import com.k2fsa.sherpa.onnx.SileroVadModelConfig
           import com.k2fsa.sherpa.onnx.Vad
           import com.k2fsa.sherpa.onnx.VadModelConfig
-          import java.io.File
 
           /**
-           * Fluxo completo: áudio do vídeo -> detector de fala (separa os trechos com voz)
-           * -> Whisper em tailandês -> tradução para inglês -> lista de legendas com tempos.
+           * Fluxo completo: áudio -> (redução de ruído opcional) -> detector de fala (separa os trechos com voz)
+           * -> (agrupamento opcional de falas curtas) -> Whisper em tailandês -> tradução para inglês
+           * -> lista de legendas com tempos.
            */
-          class SubtitleEngine(private val context: Context) {
+          class SubtitleEngine(
+              private val context: Context,
+              private val quality: Quality,
+              private val denoise: Boolean,
+              private val pack: Boolean
+          ) {
+
+              private class Piece(val start: Int, val samples: FloatArray)
 
               private var recognizer: OfflineRecognizer? = null
               private var vad: Vad? = null
+              private var denoiser: OfflineSpeechDenoiser? = null
               private var translator: Translator? = null
 
               /** Carrega os modelos (demora alguns segundos). Chamar fora da thread principal. */
               fun open() {
-                  val dir = ModelManager.dir(context)
                   val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
 
                   val whisper = OfflineWhisperModelConfig()
-                  whisper.encoder = File(dir, ModelManager.ENCODER).absolutePath
-                  whisper.decoder = File(dir, ModelManager.DECODER).absolutePath
+                  whisper.encoder = ModelManager.encoder(context, quality).absolutePath
+                  whisper.decoder = ModelManager.decoder(context, quality).absolutePath
                   whisper.language = "th"
                   whisper.task = "transcribe"
 
                   val modelConfig = OfflineModelConfig()
                   modelConfig.whisper = whisper
-                  modelConfig.tokens = File(dir, ModelManager.TOKENS).absolutePath
+                  modelConfig.tokens = ModelManager.tokens(context, quality).absolutePath
                   modelConfig.numThreads = threads
                   modelConfig.provider = "cpu"
                   modelConfig.debug = false
@@ -849,7 +1097,7 @@ jobs:
                   recognizer = OfflineRecognizer(config = config)
 
                   val silero = SileroVadModelConfig()
-                  silero.model = File(dir, ModelManager.VAD).absolutePath
+                  silero.model = ModelManager.vad(context, quality).absolutePath
                   silero.threshold = 0.5f
                   silero.minSilenceDuration = 0.4f
                   silero.minSpeechDuration = 0.25f
@@ -863,6 +1111,23 @@ jobs:
                   vadConfig.provider = "cpu"
                   vad = Vad(config = vadConfig)
 
+                  if (denoise) {
+                      val gtcrn = OfflineSpeechDenoiserGtcrnModelConfig()
+                      gtcrn.model = ModelManager.denoiser(context, quality).absolutePath
+                      val dm = OfflineSpeechDenoiserModelConfig()
+                      dm.gtcrn = gtcrn
+                      dm.numThreads = 1
+                      dm.provider = "cpu"
+                      val dc = OfflineSpeechDenoiserConfig()
+                      dc.model = dm
+                      val d = OfflineSpeechDenoiser(null, dc)
+                      if (d.sampleRate != AudioDecoder.OUT_RATE) {
+                          d.release()
+                          throw IllegalStateException("O redutor de ruído usa ${d.sampleRate} Hz; era esperado 16000 Hz.")
+                      }
+                      denoiser = d
+                  }
+
                   val tr = Translation.getClient(
                       TranslatorOptions.Builder()
                           .setSourceLanguage(TranslateLanguage.THAI)
@@ -874,33 +1139,99 @@ jobs:
               }
 
               /**
-               * Analisa o vídeo inteiro. [onCue] é chamado a cada legenda pronta, na ordem do vídeo.
-               * Chamar fora da thread principal.
+               * Analisa o arquivo inteiro (vídeo ou áudio). [onCue] é chamado a cada legenda pronta,
+               * na ordem. Chamar fora da thread principal.
                */
               fun run(
                   uri: Uri,
                   isCancelled: () -> Boolean,
                   onProgress: (Int) -> Unit,
+                  onDuration: (Long) -> Unit,
                   onCue: (Cue) -> Unit
               ): List<Cue> {
                   val rec = recognizer ?: throw IllegalStateException("Modelo não carregado")
                   val detector = vad ?: throw IllegalStateException("Modelo não carregado")
-                  val cues = ArrayList<Cue>()
                   val rate = AudioDecoder.OUT_RATE
+                  val cues = ArrayList<Cue>()
+                  val window = ArrayList<Piece>()
+                  var windowSamples = 0
+
+                  fun msOf(sample: Int): Long = sample * 1000L / rate
+
+                  fun emit(cue: Cue) {
+                      cues.add(cue)
+                      onCue(cue)
+                  }
+
+                  fun transcribe(pieces: List<Piece>) {
+                      var total = 0
+                      for ((i, p) in pieces.withIndex()) total += p.samples.size + (if (i > 0) Packing.PAD else 0)
+                      val audio = FloatArray(total)
+                      var off = 0
+                      for ((i, p) in pieces.withIndex()) {
+                          if (i > 0) off += Packing.PAD
+                          System.arraycopy(p.samples, 0, audio, off, p.samples.size)
+                          off += p.samples.size
+                      }
+
+                      val th = decodeSegment(rec, audio)
+                      if (Subtitles.looksLikeHallucination(th)) return
+                      val en = translate(th)
+
+                      if (pieces.size == 1) {
+                          val p = pieces[0]
+                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), th, en))
+                          return
+                      }
+                      // Várias falas numa janela só: o texto é repartido entre elas pela duração de cada uma.
+                      val weights = pieces.map { it.samples.size.toDouble() }
+                      val thParts = TextSplit.proportional(th, weights)
+                      val enParts = TextSplit.proportional(en, weights)
+                      for ((i, p) in pieces.withIndex()) {
+                          if (thParts[i].isEmpty() && enParts[i].isEmpty()) continue
+                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), thParts[i], enParts[i]))
+                      }
+                  }
+
+                  fun flushWindow() {
+                      if (window.isEmpty()) return
+                      val group = ArrayList(window)
+                      window.clear()
+                      windowSamples = 0
+                      transcribe(group)
+                  }
+
+                  fun addPiece(p: Piece) {
+                      if (!pack) {
+                          transcribe(listOf(p))
+                          return
+                      }
+                      if (window.isNotEmpty()) {
+                          val last = window[window.size - 1]
+                          if (!Packing.canJoin(last.start + last.samples.size, windowSamples, p.start, p.samples.size)) {
+                              flushWindow()
+                          }
+                      }
+                      windowSamples += (if (window.isEmpty()) 0 else Packing.PAD) + p.samples.size
+                      window.add(p)
+                  }
 
                   fun drain() {
                       while (!detector.empty()) {
                           val seg = detector.front()
                           detector.pop()
-                          val startMs = seg.start * 1000L / rate
-                          val endMs = startMs + seg.samples.size * 1000L / rate
-                          val th = decodeSegment(rec, seg.samples)
-                          if (Subtitles.looksLikeHallucination(th)) continue
-                          val cue = Cue(startMs, endMs, th, translate(th))
-                          cues.add(cue)
-                          onCue(cue)
+                          addPiece(Piece(seg.start, seg.samples))
                       }
                   }
+
+                  val feed: (FloatArray, Int) -> Unit = { buf, n ->
+                      detector.acceptWaveform(buf.copyOf(n))
+                      drain()
+                  }
+
+                  val den = denoiser
+                  val blocks: BlockDenoiser? =
+                      if (den != null) BlockDenoiser({ input -> den.run(input, rate).samples }, feed) else null
 
                   var lastPct = -1
                   AudioDecoder.decode(
@@ -915,13 +1246,15 @@ jobs:
                           }
                       },
                       onSamples = { buf, n ->
-                          detector.acceptWaveform(buf.copyOf(n))
-                          drain()
-                      }
+                          if (blocks != null) blocks.push(buf, n) else feed(buf, n)
+                      },
+                      onDuration = onDuration
                   )
                   if (!isCancelled()) {
+                      blocks?.finish()
                       detector.flush()
                       drain()
+                      flushWindow()
                   }
                   return cues
               }
@@ -949,9 +1282,11 @@ jobs:
               fun close() {
                   try { recognizer?.release() } catch (ignored: Throwable) {}
                   try { vad?.release() } catch (ignored: Throwable) {}
+                  try { denoiser?.release() } catch (ignored: Throwable) {}
                   try { translator?.close() } catch (ignored: Throwable) {}
                   recognizer = null
                   vad = null
+                  denoiser = null
                   translator = null
               }
           }
@@ -979,6 +1314,7 @@ jobs:
           import android.provider.OpenableColumns
           import androidx.core.app.NotificationCompat
           import androidx.core.app.ServiceCompat
+          import java.util.Locale
 
           /** Estado do trabalho em andamento, lido pela tela principal. */
           object JobState {
@@ -1090,9 +1426,11 @@ jobs:
               }
 
               private fun downloadModels() {
+                  val quality = Prefs.quality(this)
+                  val denoise = Prefs.denoise(this)
                   post("Baixando modelos…", 0)
-                  ModelManager.download(this) { label, pct -> post("$label: $pct%", pct) }
-                  post("Modelos prontos. Agora escolha um vídeo.", -1)
+                  ModelManager.download(this, quality, denoise) { label, pct -> post("$label: $pct%", pct) }
+                  post("Modelos prontos. Agora escolha um vídeo ou áudio.", -1)
               }
 
               private fun analyze(uri: Uri) {
@@ -1102,9 +1440,12 @@ jobs:
                   CueStore.begin(this, uri.toString(), name)
 
                   post("Carregando os modelos…", -1)
-                  val engine = SubtitleEngine(applicationContext)
+                  val engine = SubtitleEngine(
+                      applicationContext, Prefs.quality(this), Prefs.denoise(this), Prefs.pack(this)
+                  )
                   val startedAt = SystemClock.elapsedRealtime()
                   var count = 0
+                  var durationMs = 0L
                   val recent = ArrayList<String>()
                   try {
                       engine.open()
@@ -1116,8 +1457,14 @@ jobs:
                           onProgress = { pct ->
                               val elapsed = (SystemClock.elapsedRealtime() - startedAt) / 1000
                               val eta = if (pct >= 2) " · faltam cerca de ${(elapsed * (100 - pct) / pct / 60) + 1} min" else ""
-                              post("Analisando o áudio… $pct% · $count trechos$eta", pct)
+                              var pace = ""
+                              if (durationMs > 0 && pct >= 1 && elapsed >= 5) {
+                                  val speed = (durationMs / 1000.0 * pct / 100.0) / elapsed
+                                  pace = " · ritmo " + String.format(Locale.US, "%.2f", speed) + "× o tempo real"
+                              }
+                              post("Analisando o áudio… $pct% · $count trechos$pace$eta", pct)
                           },
+                          onDuration = { ms -> durationMs = ms },
                           onCue = { cue ->
                               count++
                               CueStore.append(this, cue)
@@ -1133,7 +1480,7 @@ jobs:
                           return
                       }
                       if (cues.isEmpty()) {
-                          post("Não encontrei fala em tailandês neste vídeo.", -1)
+                          post("Não encontrei fala em tailandês neste arquivo.", -1)
                           return
                       }
 
@@ -1218,7 +1565,10 @@ jobs:
           import android.os.Bundle
           import android.view.View
           import android.widget.Button
+          import android.widget.CheckBox
           import android.widget.ProgressBar
+          import android.widget.RadioButton
+          import android.widget.RadioGroup
           import android.widget.TextView
           import android.widget.Toast
           import androidx.activity.result.contract.ActivityResultContracts
@@ -1234,8 +1584,16 @@ jobs:
               private lateinit var btnPick: Button
               private lateinit var btnCancel: Button
               private lateinit var btnOpen: Button
+              private lateinit var rgQuality: RadioGroup
+              private lateinit var rbSmall: RadioButton
+              private lateinit var rbBase: RadioButton
+              private lateinit var cbPack: CheckBox
+              private lateinit var cbDenoise: CheckBox
 
-              private val pickVideo =
+              // Evita tratar como "clique do usuário" o ajuste inicial das opções.
+              private var binding = false
+
+              private val pickMedia =
                   registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
                       if (uri != null) startAnalysis(uri)
                   }
@@ -1251,13 +1609,40 @@ jobs:
                   btnPick = findViewById(R.id.btnPick)
                   btnCancel = findViewById(R.id.btnCancel)
                   btnOpen = findViewById(R.id.btnOpen)
+                  rgQuality = findViewById(R.id.rgQuality)
+                  rbSmall = findViewById(R.id.rbSmall)
+                  rbBase = findViewById(R.id.rbBase)
+                  cbPack = findViewById(R.id.cbPack)
+                  cbDenoise = findViewById(R.id.cbDenoise)
+
+                  binding = true
+                  if (Prefs.quality(this) == Quality.BASE) rgQuality.check(R.id.rbBase) else rgQuality.check(R.id.rbSmall)
+                  cbPack.isChecked = Prefs.pack(this)
+                  cbDenoise.isChecked = Prefs.denoise(this)
+                  binding = false
+
+                  rgQuality.setOnCheckedChangeListener { _, id ->
+                      if (!binding) {
+                          Prefs.setQuality(this, if (id == R.id.rbBase) Quality.BASE else Quality.SMALL)
+                          render()
+                      }
+                  }
+                  cbPack.setOnCheckedChangeListener { _, checked ->
+                      if (!binding) Prefs.setPack(this, checked)
+                  }
+                  cbDenoise.setOnCheckedChangeListener { _, checked ->
+                      if (!binding) {
+                          Prefs.setDenoise(this, checked)
+                          render()
+                      }
+                  }
 
                   btnModels.setOnClickListener {
                       ContextCompat.startForegroundService(
                           this, Intent(this, JobService::class.java).setAction(JobService.ACTION_DOWNLOAD)
                       )
                   }
-                  btnPick.setOnClickListener { pickVideo.launch(arrayOf("video/*")) }
+                  btnPick.setOnClickListener { pickMedia.launch(arrayOf("video/*", "audio/*")) }
                   btnCancel.setOnClickListener {
                       startService(Intent(this, JobService::class.java).setAction(JobService.ACTION_CANCEL))
                   }
@@ -1278,8 +1663,8 @@ jobs:
               }
 
               private fun startAnalysis(uri: Uri) {
-                  if (!ModelManager.ready(this)) {
-                      Toast.makeText(this, "Baixe os modelos primeiro.", Toast.LENGTH_LONG).show()
+                  if (!ModelManager.ready(this, Prefs.quality(this), Prefs.denoise(this))) {
+                      Toast.makeText(this, "Baixe os modelos escolhidos primeiro.", Toast.LENGTH_LONG).show()
                       return
                   }
                   try {
@@ -1295,13 +1680,13 @@ jobs:
 
               private fun render() {
                   val busy = JobState.busy
-                  val ready = ModelManager.ready(this)
+                  val ready = ModelManager.ready(this, Prefs.quality(this), Prefs.denoise(this))
 
                   val status = JobState.status
                   tvStatus.text = when {
                       status.isNotEmpty() -> status
-                      ready -> "Modelos prontos. Escolha um vídeo."
-                      else -> "Primeiro baixe os modelos (uma vez só, usa internet)."
+                      ready -> "Modelos prontos. Escolha um vídeo ou áudio."
+                      else -> "Primeiro baixe os modelos escolhidos (uma vez só, usa internet)."
                   }
 
                   val p = JobState.percent
@@ -1310,6 +1695,11 @@ jobs:
                   if (p >= 0) progress.progress = p
 
                   tvLog.text = JobState.log.joinToString("\n")
+
+                  rbSmall.isEnabled = !busy
+                  rbBase.isEnabled = !busy
+                  cbPack.isEnabled = !busy
+                  cbDenoise.isEnabled = !busy
 
                   btnModels.isEnabled = !busy && !ready
                   btnPick.isEnabled = !busy && ready
