@@ -1,6 +1,6 @@
 name: Compilar APK
 
-# Este arquivo contem o projeto inteiro (Legendas TH-EN). Ao salvar no GitHub,
+# Este arquivo contem o projeto inteiro (Legendas TH, so tailandes). Ao salvar no GitHub,
 # ele compila o app sozinho e publica o APK na aba "Releases".
 on:
   push:
@@ -13,6 +13,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Baixar o repositorio com o historico
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Instalar Java
         uses: actions/setup-java@v4
         with:
@@ -80,8 +85,8 @@ jobs:
                   // Android 10 (API 29) é o mínimo para salvar o .srt em Downloads sem permissão
                   minSdk = 29
                   targetSdk = 34
-                  versionCode = 1
-                  versionName = "2.0"
+                  versionCode = 4
+                  versionName = "3.1"
 
                   ndk {
                       abiFilters += listOf("arm64-v8a", "armeabi-v7a")
@@ -118,16 +123,9 @@ jobs:
               implementation("androidx.appcompat:appcompat:1.7.0")
               implementation("com.google.android.material:material:1.12.0")
 
-              // Reconhecimento de voz offline (Whisper + detector de fala), baixado pelo workflow em app/libs
+              // Reconhecimento de voz offline (Whisper + detector de fala + isolamento da voz), baixado pelo workflow em app/libs
               implementation(files("libs/sherpa-onnx-1.13.7.aar"))
-
-              // Tradução offline tailandês -> inglês
-              implementation("com.google.mlkit:translate:17.0.3")
           }
-          LEGENDAS_EOF_END
-          mkdir -p "$(dirname 'app/debug.keystore.b64')"
-          cat > 'app/debug.keystore.b64' <<'LEGENDAS_EOF_END'
-          MIIKZgIBAzCCChAGCSqGSIb3DQEHAaCCCgEEggn9MIIJ+TCCBcAGCSqGSIb3DQEHAaCCBbEEggWtMIIFqTCCBaUGCyqGSIb3DQEMCgECoIIFQDCCBTwwZgYJKoZIhvcNAQUNMFkwOAYJKoZIhvcNAQUMMCsEFCKhcqCudjzJ09Eh0OWQfcpmEIjcAgInEAIBIDAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQt0ZPWtBM7dlym+JBzVjAzASCBNCvklo2DAkKBCHY5QrfkrbfLqNf3+UVCXVMbi7kaReur2A58pD2yTWihm0yrYOerqi4Z6VoVS27iHVjRSEM1NWilRKHMcmFri7ZYgXn9tr0T5YFIhPFTeO86hOWDNp/k7rA+N+zoQKPh9MKn8UevQOo1OxmAXrinXBqSTgwwObXldThfydZpsfcc40dfBCNRtNsrzhcDKt+TSS3AyOvZnDAO80Dlwu3sMrA81roVNJY1kl4NvaoaHXQiZrA1qDANqWejV9rHnGAigDz1+UJHt4OvW//KIBI4GgjyS+5vsiaIXLl8N6vWNbEIVA1oFQhfuaOpn2VB9oxgEJkbNn9tFUNGnreA1zYnRLXyN2nn/qv+rF1Ae7iEFdvti1ZkeMeJy6ia7gus+CapaKizuwsnbQp594KIpQrOUesmURwLHzbmmtKKEPStjhzMf6dlSDDUevIQFIDFZb2iF4P1f8N3ZvNyqfitEjl5Oez+BwkWxYuwnYYue/azdKXe/gL2mrWnA/f1PT+w3ick5Zj7sb/S/ydRxyDYP9bIaDjnLlIyTH/koYhffh39ffmHzhhkU6pPtChjf6QAn6iScMPXKpbYMgr2CxMlTEsKTY/CKuatc2NdH4tZNXOVa/aNAeSx0Qh5fmholpcRtfpgcHbh16TfUeyNKSO8TW3eW1zazbJu3d48R0L0rOZtS26xdOE4D3baFWwZJmaQNmyX5KukgJRscBEVhbn8fzZHT1eGi98aNAlVytW1scb+/GIW7AuB1YExQG0jUYWKLcyJJJ5+PPcPovpLW/1hvfvbT1QCUWlogD0UvzcTc0OfyDyNfF73E3afbmQOKbqnaTDgm/JZqOnxU30xcDGNP77ooeVTu7HWHXMVuFhIvaWPdBw1+h8V7D38jEaG2wEgdnWy5n+ZMB4Vo+3d54x1yraEyMkrQZrBZLQA7IcJeX2oJwuJ+2yg+pGxLOZOrbRwE7nbBfRFQQIJp2Mx0lC0OacnS+Mu5hF9su2xDqT68poUr1kmA9wogTd7QX0cj5/1OioNdSFnqWguc1hf7GEEWALgTF1oAD0QXmd7Ap4wlaKdguAt3QGIyJ7dHxR7Ix0t9sYUY50ym1qeqooSRWALTXcu/sMMN9rvXqeq3n2qE5cNRzF0LTx1NL9c/zoiNoNm9jQfD6XZNAFnGjRtYo4NnVf6wrZfXUxq2T58x1wWWXiDdrPlXq6pSLulJ6+4/4gkWhk1xpB/H6HuNRC/fd2o177p7CJFCfxS6N367o/NFR/7qj5InC5lsLnV+VXMgVVb451wxrdOCbY9y6dX4u6M6IhYnSZY3ilnVr/uuxempQCynakDOVsr1urIm/o6TICkeOLWcnYavU3ZLa1lrbHYu8fR+Hm5qtQwnSp8a3xYJHTukmd8PfVCup/w3Tn7iUFX1McpJaX7FsAk38R7cKPXeYckaEwIAVcCBoHmVxzKw98i1jqOxb0TYMA8mI32PwAWv2r8YuzkTiCH7Ey1k7A6iQaSrJcnJUXzLjj27ks03LNUiV2aNRUvCb4o4nrbxZPOWMNKgqLZezqI+DhEZ/zuaiUs5HkzftHLe8voZjFlCJ9dRtR4Cf/scBfUOSNIpyCjfKIMBSviRSyZuGAhH4Da2sSolDD8dmrtvhifTFSMC0GCSqGSIb3DQEJFDEgHh4AYQBuAGQAcgBvAGkAZABkAGUAYgB1AGcAawBlAHkwIQYJKoZIhvcNAQkVMRQEElRpbWUgMTc5MzUxNTEyMTcyMjCCBDEGCSqGSIb3DQEHBqCCBCIwggQeAgEAMIIEFwYJKoZIhvcNAQcBMGYGCSqGSIb3DQEFDTBZMDgGCSqGSIb3DQEFDDArBBQVSWmXeNsx0xi12PEW3j+xK27r5gICJxACASAwDAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEIpQ99jUP9OdsWJe5g0dwOOAggOgKJcfgKH4gn+qrNCKzF8VBRyWF5FHayp21T08IEDynK3qBo7TmAKG71RjeyFbcPTsY8C6Ol79GkIWgcTlmBPQR9KPljb117fU5tmQiXvNU8pDcANS5awPLAgR/B5BJ2QQZi1nq/4g5eF3U1plF5A2P0T2BXtGKRWvgcxddk/Gb33K5clexTPvGxb5FZ/oHayeiyUDJTHixeBYHJvsEH5ijlsSUiN7hBMmPukE8tRI+9JD5fZSe0hjcurs15RRLgYktMJVgLkn+U6X8gvWWuycAIorZt/MBGYUFEEgDGdEcfhbf6gSKonqpy5dKTzqnEOO0dpwvpcoykMftJnaqCei+9bAYRVh7btsRUamX5kj4EdCO72iMOSS7h2nddALLElRPlSk7zkoO1E8cUa5XM/W/ILeremyZwc7yJ4lz+j04DUxHxG/Q2h4QWf23+30b8tBsIqSsy5ERG65jtAoBzytaSg1TeXUT1eyolArQgjEbZKIHTKTCfwgtB6PR5OffAzYu2VdhQwtv1g23mQDKVEWyals6b32t6AW6oRiT9fQyvsdKLAY6FHdUVlc8k4Xg9/YuJg67YgqyJ/WHd/aZtt7gMxB/FnR/ser0Ly0ylAr1kemMaNPzRnS9nToxZrtoUfaxBPKxukHN/vsOErTiYWTaBTZvtgEAmH2Qc1soYLbiSL5/19pyuYEyT9grkKC4IZZwmXmOGGDepRFS+Fk8RnvQo8pNQkfsz7Z+a4kIvH4xJ/a4mdjagGJE1UssCDSQxJ1CJoJL8P0FuqrPoWifYk+70U798Uwu/lmwdJ2Y6j97ruFJoYTq49igU77EuhoL6ai/kELDH4CMJ90+BCMqB/Nu7MVs7v4MxoHdL5czjhqOS/4n5B4feppiZi4JNc5dOjLLoDAioiSbC/OVoTkW7H5AHvmqZ8/GqmPFjzXpUbSNdJSkWXW3CK7jez2vG7qt1sX8qv8kFGVM0ncyc5gaxdiSuwZR3C2fC2pNQwYIxclYtU7KXJer9Qrn0sv9Ro9ecfGp0Gqx0O/Q9o+SemS+N4lKrVeByHdQAdamcWJCzQi4MWzfpgcN9jwd38d1aRAnyIvue7CWpDLPoG8gu4jBehITyfnW1xPdBqFb5+4tcqO1AzoahPMJmTNYe6XN82atQO7zLsQuamzKgg/kAbvx5Oc5bXbiKg4gZo4WbYJOohcFmC1xO9mClBGolGLOJNp2tik0P1DtBO8mwtiDgpHcT8l+DBNMDEwDQYJYIZIAWUDBAIBBQAEIKAWRN8T0aZtrY1m+uVwG5qDOtmdMip7gya/ml0C0DQNBBQlp8MVA99Q2+OPVNfLVYhrkPWnAAICJxA=
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/AndroidManifest.xml')"
           cat > 'app/src/main/AndroidManifest.xml' <<'LEGENDAS_EOF_END'
@@ -199,7 +197,7 @@ jobs:
                   <TextView
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="Legendas tailandês → inglês"
+                      android:text="Legendas em tailandês"
                       android:textSize="22sp"
                       android:textStyle="bold" />
 
@@ -207,7 +205,7 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="12dp"
-                      android:text="Escolha um vídeo ou áudio baixado no celular. O app reconhece o tailandês do arquivo, traduz para inglês e mostra com as legendas. Também salva arquivos .srt na pasta Downloads/LegendasTH.\n\nNão usa microfone nem grava a tela. Tudo roda no aparelho."
+                      android:text="Escolha um vídeo ou áudio baixado no celular. O app isola a voz (tira ruído e efeitos de fundo), reconhece o tailandês do arquivo e mostra a legenda em tailandês. Também salva um arquivo .srt na pasta Downloads/LegendasTH.\n\nNão usa microfone nem grava a tela. Tudo roda no aparelho."
                       android:textSize="15sp" />
 
                   <TextView
@@ -248,7 +246,7 @@ jobs:
                       android:id="@+id/cbDenoise"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="Reduzir ruído antes de reconhecer (modelo pequeno). Ajuda com chiado e ruído de fundo, mas pode piorar em alguns arquivos: teste os dois." />
+                      android:text="Isolar a voz antes de reconhecer (tira ruído e sons de fundo; modelo pequeno). Não separa música de verdade e pode piorar em alguns arquivos: se a legenda piorar, desligue e compare." />
 
                   <TextView
                       android:id="@+id/tvStatus"
@@ -330,7 +328,7 @@ jobs:
                   android:paddingEnd="16dp">
 
                   <TextView
-                      android:id="@+id/tvEn"
+                      android:id="@+id/tvTh"
                       android:layout_width="wrap_content"
                       android:layout_height="wrap_content"
                       android:background="#99000000"
@@ -343,34 +341,8 @@ jobs:
                       android:textSize="18sp"
                       android:textStyle="bold"
                       android:visibility="gone" />
-
-                  <TextView
-                      android:id="@+id/tvTh"
-                      android:layout_width="wrap_content"
-                      android:layout_height="wrap_content"
-                      android:layout_marginTop="4dp"
-                      android:background="#99000000"
-                      android:ellipsize="end"
-                      android:gravity="center"
-                      android:maxLines="2"
-                      android:paddingStart="10dp"
-                      android:paddingTop="2dp"
-                      android:paddingEnd="10dp"
-                      android:paddingBottom="2dp"
-                      android:textColor="#CCCCCC"
-                      android:textSize="13sp"
-                      android:visibility="gone" />
               </LinearLayout>
 
-              <CheckBox
-                  android:id="@+id/cbThai"
-                  android:layout_width="wrap_content"
-                  android:layout_height="wrap_content"
-                  android:layout_gravity="top|end"
-                  android:layout_margin="8dp"
-                  android:checked="true"
-                  android:text="Mostrar tailandês"
-                  android:textColor="#FFFFFF" />
           </FrameLayout>
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/Cue.kt')"
@@ -381,12 +353,10 @@ jobs:
           import java.io.File
           import java.util.Locale
 
-          /** Uma legenda: tempos em milissegundos, texto original (tailandês) e tradução (inglês). */
-          data class Cue(val startMs: Long, val endMs: Long, val th: String, val en: String)
+          /** Uma legenda: tempos em milissegundos e o texto em tailandês. */
+          data class Cue(val startMs: Long, val endMs: Long, val th: String)
 
           object Subtitles {
-              private const val LINE_CHARS = 42
-
               fun clock(ms: Long): String {
                   val total = ms / 1000
                   return String.format(Locale.US, "%02d:%02d", total / 60, total % 60)
@@ -415,53 +385,6 @@ jobs:
                       if (count >= 4 && count * unit >= s.length * 0.8) return true
                   }
                   return false
-              }
-
-              /** Quebra o texto em legendas de até 2 linhas de 42 caracteres. */
-              fun splitEnglish(text: String): List<String> {
-                  val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-                  if (words.isEmpty()) return listOf("")
-                  val lines = ArrayList<String>()
-                  var cur = StringBuilder()
-                  for (w in words) {
-                      if (cur.isNotEmpty() && cur.length + 1 + w.length > LINE_CHARS) {
-                          lines.add(cur.toString())
-                          cur = StringBuilder()
-                      }
-                      if (cur.isNotEmpty()) cur.append(' ')
-                      cur.append(w)
-                  }
-                  if (cur.isNotEmpty()) lines.add(cur.toString())
-                  val result = ArrayList<String>()
-                  var i = 0
-                  while (i < lines.size) {
-                      result.add(if (i + 1 < lines.size) lines[i] + "\n" + lines[i + 1] else lines[i])
-                      i += 2
-                  }
-                  return result
-              }
-
-              /** Divide legendas longas em várias, repartindo o tempo pelo tamanho do texto. */
-              fun expand(cues: List<Cue>): List<Cue> {
-                  val out = ArrayList<Cue>()
-                  for (c in cues) {
-                      val parts = splitEnglish(c.en)
-                      if (parts.size <= 1) {
-                          out.add(c)
-                          continue
-                      }
-                      val total = parts.sumOf { it.length }.coerceAtLeast(1)
-                      val dur = (c.endMs - c.startMs).coerceAtLeast(1L)
-                      var acc = 0
-                      var cursor = c.startMs
-                      for ((i, p) in parts.withIndex()) {
-                          acc += p.length
-                          val end = if (i == parts.lastIndex) c.endMs else c.startMs + dur * acc / total
-                          out.add(Cue(cursor, end, c.th, p))
-                          cursor = end
-                      }
-                  }
-                  return out
               }
 
               private fun stamp(ms: Long): String {
@@ -500,7 +423,7 @@ jobs:
 
               fun append(context: Context, cue: Cue) {
                   File(context.filesDir, FILE).appendText(
-                      "${cue.startMs}\t${cue.endMs}\t${clean(cue.th)}\t${clean(cue.en)}\n"
+                      "${cue.startMs}\t${cue.endMs}\t${clean(cue.th)}\n"
                   )
               }
 
@@ -519,10 +442,10 @@ jobs:
                   val cues = ArrayList<Cue>()
                   for (i in 1 until lines.size) {
                       val p = lines[i].split('\t', limit = 4)
-                      if (p.size < 4) continue
+                      if (p.size < 3) continue
                       val a = p[0].toLongOrNull() ?: continue
                       val b = p[1].toLongOrNull() ?: continue
-                      cues.add(Cue(a, b, p[2], p[3]))
+                      cues.add(Cue(a, b, p[2]))
                   }
                   return Saved(head[0], if (head.size > 1) head[1] else "vídeo", cues)
               }
@@ -682,11 +605,14 @@ jobs:
                   p(context).edit().putBoolean("agrupar", value).apply()
               }
 
-              /** Reduzir ruído antes de reconhecer. Desligado por padrão. */
-              fun denoise(context: Context): Boolean = p(context).getBoolean("ruido", false)
+              /**
+               * Isolar a voz (tirar ruído e efeitos de fundo) antes de reconhecer. Ligado por padrão.
+               * Chave nova ("isolar_voz"): quem testou a versão anterior (opção "ruido", desligada) passa a ter o padrão ligado.
+               */
+              fun denoise(context: Context): Boolean = p(context).getBoolean("isolar_voz", true)
 
               fun setDenoise(context: Context, value: Boolean) {
-                  p(context).edit().putBoolean("ruido", value).apply()
+                  p(context).edit().putBoolean("isolar_voz", value).apply()
               }
           }
           LEGENDAS_EOF_END
@@ -1037,12 +963,6 @@ jobs:
 
           import android.content.Context
           import android.net.Uri
-          import com.google.android.gms.tasks.Tasks
-          import com.google.mlkit.common.model.DownloadConditions
-          import com.google.mlkit.nl.translate.TranslateLanguage
-          import com.google.mlkit.nl.translate.Translation
-          import com.google.mlkit.nl.translate.Translator
-          import com.google.mlkit.nl.translate.TranslatorOptions
           import com.k2fsa.sherpa.onnx.OfflineModelConfig
           import com.k2fsa.sherpa.onnx.OfflineRecognizer
           import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
@@ -1056,9 +976,9 @@ jobs:
           import com.k2fsa.sherpa.onnx.VadModelConfig
 
           /**
-           * Fluxo completo: áudio -> (redução de ruído opcional) -> detector de fala (separa os trechos com voz)
-           * -> (agrupamento opcional de falas curtas) -> Whisper em tailandês -> tradução para inglês
-           * -> lista de legendas com tempos.
+           * Fluxo completo: áudio -> (isolamento da voz: tira ruído e efeitos de fundo) -> detector de fala
+           * (separa os trechos com voz) -> (agrupamento opcional de falas curtas) -> Whisper em tailandês
+           * -> lista de legendas em tailandês com tempos.
            */
           class SubtitleEngine(
               private val context: Context,
@@ -1072,7 +992,6 @@ jobs:
               private var recognizer: OfflineRecognizer? = null
               private var vad: Vad? = null
               private var denoiser: OfflineSpeechDenoiser? = null
-              private var translator: Translator? = null
 
               /** Carrega os modelos (demora alguns segundos). Chamar fora da thread principal. */
               fun open() {
@@ -1127,15 +1046,6 @@ jobs:
                       }
                       denoiser = d
                   }
-
-                  val tr = Translation.getClient(
-                      TranslatorOptions.Builder()
-                          .setSourceLanguage(TranslateLanguage.THAI)
-                          .setTargetLanguage(TranslateLanguage.ENGLISH)
-                          .build()
-                  )
-                  Tasks.await(tr.downloadModelIfNeeded(DownloadConditions.Builder().build()))
-                  translator = tr
               }
 
               /**
@@ -1176,20 +1086,18 @@ jobs:
 
                       val th = decodeSegment(rec, audio)
                       if (Subtitles.looksLikeHallucination(th)) return
-                      val en = translate(th)
 
                       if (pieces.size == 1) {
                           val p = pieces[0]
-                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), th, en))
+                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), th))
                           return
                       }
                       // Várias falas numa janela só: o texto é repartido entre elas pela duração de cada uma.
                       val weights = pieces.map { it.samples.size.toDouble() }
                       val thParts = TextSplit.proportional(th, weights)
-                      val enParts = TextSplit.proportional(en, weights)
                       for ((i, p) in pieces.withIndex()) {
-                          if (thParts[i].isEmpty() && enParts[i].isEmpty()) continue
-                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), thParts[i], enParts[i]))
+                          if (thParts[i].isEmpty()) continue
+                          emit(Cue(msOf(p.start), msOf(p.start + p.samples.size), thParts[i]))
                       }
                   }
 
@@ -1270,24 +1178,13 @@ jobs:
                   }
               }
 
-              private fun translate(text: String): String {
-                  val tr = translator ?: return ""
-                  return try {
-                      Tasks.await(tr.translate(text)).trim()
-                  } catch (e: Exception) {
-                      ""
-                  }
-              }
-
               fun close() {
                   try { recognizer?.release() } catch (ignored: Throwable) {}
                   try { vad?.release() } catch (ignored: Throwable) {}
                   try { denoiser?.release() } catch (ignored: Throwable) {}
-                  try { translator?.close() } catch (ignored: Throwable) {}
                   recognizer = null
                   vad = null
                   denoiser = null
-                  translator = null
               }
           }
           LEGENDAS_EOF_END
@@ -1468,7 +1365,7 @@ jobs:
                           onCue = { cue ->
                               count++
                               CueStore.append(this, cue)
-                              recent.add("[${Subtitles.clock(cue.startMs)}] ${cue.th}\n  → ${cue.en}")
+                              recent.add("[${Subtitles.clock(cue.startMs)}] ${cue.th}")
                               while (recent.size > 6) recent.removeAt(0)
                               JobState.log = ArrayList(recent)
                               JobState.changed()
@@ -1492,11 +1389,9 @@ jobs:
               }
 
               private fun saveSrtFiles(base: String, cues: List<Cue>): String {
-                  val en = Subtitles.toSrt(Subtitles.expand(cues)) { it.en }
                   val th = Subtitles.toSrt(cues) { it.th }
-                  val ok1 = saveText("$base.en.srt", en)
-                  val ok2 = saveText("$base.th.srt", th)
-                  return if (ok1 && ok2) "Arquivos .srt salvos em Downloads/LegendasTH." else "Não consegui salvar os .srt."
+                  val ok = saveText("$base.th.srt", th)
+                  return if (ok) "Arquivo .srt salvo em Downloads/LegendasTH." else "Não consegui salvar o .srt."
               }
 
               private fun saveText(fileName: String, content: String): Boolean {
@@ -1718,20 +1613,17 @@ jobs:
           import android.os.Looper
           import android.view.View
           import android.view.WindowManager
-          import android.widget.CheckBox
           import android.widget.MediaController
           import android.widget.TextView
           import android.widget.Toast
           import android.widget.VideoView
           import androidx.appcompat.app.AppCompatActivity
 
-          /** Toca o vídeo e mostra por cima as legendas em inglês (e, se quiser, o tailandês). */
+          /** Toca o vídeo (ou áudio) e mostra por cima a legenda em tailandês. */
           class PlayerActivity : AppCompatActivity() {
 
               private lateinit var video: VideoView
-              private lateinit var tvEn: TextView
               private lateinit var tvTh: TextView
-              private lateinit var cbThai: CheckBox
 
               private var cues: List<Cue> = emptyList()
               private val handler = Handler(Looper.getMainLooper())
@@ -1750,9 +1642,7 @@ jobs:
                   window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
                   video = findViewById(R.id.video)
-                  tvEn = findViewById(R.id.tvEn)
                   tvTh = findViewById(R.id.tvTh)
-                  cbThai = findViewById(R.id.cbThai)
 
                   val saved = CueStore.load(this)
                   if (saved == null || saved.cues.isEmpty()) {
@@ -1760,7 +1650,7 @@ jobs:
                       finish()
                       return
                   }
-                  cues = Subtitles.expand(saved.cues)
+                  cues = saved.cues
 
                   val controller = MediaController(this)
                   controller.setAnchorView(video)
@@ -1790,23 +1680,12 @@ jobs:
 
               private fun updateSubtitle() {
                   val cue = cueAt(video.currentPosition.toLong())
-                  if (cue == null) {
-                      tvEn.visibility = View.GONE
+                  if (cue == null || cue.th.isEmpty()) {
                       tvTh.visibility = View.GONE
                       return
                   }
-                  if (cue.en.isEmpty()) {
-                      tvEn.visibility = View.GONE
-                  } else {
-                      tvEn.text = cue.en
-                      tvEn.visibility = View.VISIBLE
-                  }
-                  if (cbThai.isChecked && cue.th.isNotEmpty()) {
-                      tvTh.text = cue.th
-                      tvTh.visibility = View.VISIBLE
-                  } else {
-                      tvTh.visibility = View.GONE
-                  }
+                  tvTh.text = cue.th
+                  tvTh.visibility = View.VISIBLE
               }
 
               /** As legendas estão em ordem e sem sobreposição, então basta uma busca binária. */
@@ -1829,13 +1708,41 @@ jobs:
           }
           LEGENDAS_EOF_END
 
-      - name: Preparar certificado fixo e biblioteca de voz
+      - name: Recuperar certificado fixo
+        run: |
+          # Procura, no historico deste repositorio, o certificado fixo que as versoes
+          # anteriores embutiram neste arquivo. Assim o APK novo continua atualizando o app
+          # instalado por cima, sem apagar os modelos baixados.
+          set +e
+          mkdir -p proj/app
+          found=0
+          for c in $(git rev-list HEAD -- .github/workflows/build.yml); do
+            git show "$c:.github/workflows/build.yml" > /tmp/old.yml 2>/dev/null || continue
+            awk '/cat >.*debug\.keystore\.b64.*<</ {g=1; next} g==1 {gsub(/^[ \t]+/, ""); gsub(/[ \t\r]+$/, ""); print; exit}' /tmp/old.yml > /tmp/ks.b64
+            if [ -s /tmp/ks.b64 ] && base64 -d /tmp/ks.b64 > /tmp/ks.p12 2>/dev/null \
+               && keytool -list -keystore /tmp/ks.p12 -storepass android > /dev/null 2>&1; then
+              cp /tmp/ks.p12 proj/app/debug.keystore
+              found=1
+              echo "Certificado fixo recuperado do commit $c"
+              break
+            fi
+          done
+          if [ "$found" = "0" ]; then
+            echo "::warning::Nao achei o certificado fixo no historico. Gerando um novo: o Android vai exigir desinstalar a versao antiga (os modelos baixados serao apagados)."
+            keytool -genkeypair -keystore proj/app/debug.keystore -storetype PKCS12 \
+              -storepass android -keypass android -alias androiddebugkey \
+              -keyalg RSA -keysize 2048 -validity 36500 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          set -e
+          ls -la proj/app/debug.keystore
+
+      - name: Baixar a biblioteca de voz
         working-directory: proj
         run: |
-          base64 -d app/debug.keystore.b64 > app/debug.keystore
           mkdir -p app/libs
           curl -fL --retry 3 -o app/libs/sherpa-onnx-1.13.7.aar https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.7/sherpa-onnx-1.13.7.aar
-          ls -la app/libs app/debug.keystore
+          ls -la app/libs
 
       - name: Aceitar licencas do Android SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
@@ -1851,5 +1758,5 @@ jobs:
         run: >
           gh release create "build-${{ github.run_number }}"
           proj/app/build/outputs/apk/debug/app-debug.apk
-          --title "Legendas TH-EN (build ${{ github.run_number }})"
+          --title "Legendas TH (build ${{ github.run_number }})"
           --notes "Baixe o arquivo app-debug.apk e instale no celular."
