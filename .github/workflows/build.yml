@@ -1,6 +1,6 @@
 name: Compilar APK
 
-# Este arquivo contem o projeto inteiro (Legendas JP-EN). Ao salvar no GitHub,
+# Este arquivo contem o projeto inteiro (Legendas TH-EN). Ao salvar no GitHub,
 # ele compila o app sozinho e publica o APK na aba "Releases".
 on:
   push:
@@ -40,14 +40,14 @@ jobs:
           }
 
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories {
                   google()
                   mavenCentral()
               }
           }
 
-          rootProject.name = "LegendasJP"
+          rootProject.name = "LegendasTH"
           include(":app")
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'build.gradle.kts')"
@@ -72,16 +72,30 @@ jobs:
           }
 
           android {
-              namespace = "com.example.legendasjp"
+              namespace = "com.example.legendasth"
               compileSdk = 34
 
               defaultConfig {
-                  applicationId = "com.example.legendasjp"
-                  // Android 10 (API 29) é o mínimo para capturar o áudio interno do aparelho
+                  applicationId = "com.example.legendasth"
+                  // Android 10 (API 29) é o mínimo para salvar o .srt em Downloads sem permissão
                   minSdk = 29
                   targetSdk = 34
                   versionCode = 1
-                  versionName = "1.0"
+                  versionName = "2.0"
+
+                  ndk {
+                      abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+                  }
+              }
+
+              // Chave fixa: assim cada APK novo atualiza o app instalado sem apagar os modelos baixados.
+              signingConfigs {
+                  getByName("debug") {
+                      storeFile = file("debug.keystore")
+                      storePassword = "android"
+                      keyAlias = "androiddebugkey"
+                      keyPassword = "android"
+                  }
               }
 
               buildTypes {
@@ -104,30 +118,33 @@ jobs:
               implementation("androidx.appcompat:appcompat:1.7.0")
               implementation("com.google.android.material:material:1.12.0")
 
-              // Reconhecimento de voz offline (Vosk) - combinação documentada pelo projeto Vosk
-              implementation("net.java.dev.jna:jna:5.13.0@aar")
-              implementation("com.alphacephei:vosk-android:0.3.47")
+              // Reconhecimento de voz offline (Whisper + detector de fala), baixado pelo workflow em app/libs
+              implementation(files("libs/sherpa-onnx-1.13.7.aar"))
 
-              // Tradução offline japonês -> inglês (ML Kit)
+              // Tradução offline tailandês -> inglês
               implementation("com.google.mlkit:translate:17.0.3")
           }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/debug.keystore.b64')"
+          cat > 'app/debug.keystore.b64' <<'LEGENDAS_EOF_END'
+          MIIKZgIBAzCCChAGCSqGSIb3DQEHAaCCCgEEggn9MIIJ+TCCBcAGCSqGSIb3DQEHAaCCBbEEggWtMIIFqTCCBaUGCyqGSIb3DQEMCgECoIIFQDCCBTwwZgYJKoZIhvcNAQUNMFkwOAYJKoZIhvcNAQUMMCsEFCKhcqCudjzJ09Eh0OWQfcpmEIjcAgInEAIBIDAMBggqhkiG9w0CCQUAMB0GCWCGSAFlAwQBKgQQt0ZPWtBM7dlym+JBzVjAzASCBNCvklo2DAkKBCHY5QrfkrbfLqNf3+UVCXVMbi7kaReur2A58pD2yTWihm0yrYOerqi4Z6VoVS27iHVjRSEM1NWilRKHMcmFri7ZYgXn9tr0T5YFIhPFTeO86hOWDNp/k7rA+N+zoQKPh9MKn8UevQOo1OxmAXrinXBqSTgwwObXldThfydZpsfcc40dfBCNRtNsrzhcDKt+TSS3AyOvZnDAO80Dlwu3sMrA81roVNJY1kl4NvaoaHXQiZrA1qDANqWejV9rHnGAigDz1+UJHt4OvW//KIBI4GgjyS+5vsiaIXLl8N6vWNbEIVA1oFQhfuaOpn2VB9oxgEJkbNn9tFUNGnreA1zYnRLXyN2nn/qv+rF1Ae7iEFdvti1ZkeMeJy6ia7gus+CapaKizuwsnbQp594KIpQrOUesmURwLHzbmmtKKEPStjhzMf6dlSDDUevIQFIDFZb2iF4P1f8N3ZvNyqfitEjl5Oez+BwkWxYuwnYYue/azdKXe/gL2mrWnA/f1PT+w3ick5Zj7sb/S/ydRxyDYP9bIaDjnLlIyTH/koYhffh39ffmHzhhkU6pPtChjf6QAn6iScMPXKpbYMgr2CxMlTEsKTY/CKuatc2NdH4tZNXOVa/aNAeSx0Qh5fmholpcRtfpgcHbh16TfUeyNKSO8TW3eW1zazbJu3d48R0L0rOZtS26xdOE4D3baFWwZJmaQNmyX5KukgJRscBEVhbn8fzZHT1eGi98aNAlVytW1scb+/GIW7AuB1YExQG0jUYWKLcyJJJ5+PPcPovpLW/1hvfvbT1QCUWlogD0UvzcTc0OfyDyNfF73E3afbmQOKbqnaTDgm/JZqOnxU30xcDGNP77ooeVTu7HWHXMVuFhIvaWPdBw1+h8V7D38jEaG2wEgdnWy5n+ZMB4Vo+3d54x1yraEyMkrQZrBZLQA7IcJeX2oJwuJ+2yg+pGxLOZOrbRwE7nbBfRFQQIJp2Mx0lC0OacnS+Mu5hF9su2xDqT68poUr1kmA9wogTd7QX0cj5/1OioNdSFnqWguc1hf7GEEWALgTF1oAD0QXmd7Ap4wlaKdguAt3QGIyJ7dHxR7Ix0t9sYUY50ym1qeqooSRWALTXcu/sMMN9rvXqeq3n2qE5cNRzF0LTx1NL9c/zoiNoNm9jQfD6XZNAFnGjRtYo4NnVf6wrZfXUxq2T58x1wWWXiDdrPlXq6pSLulJ6+4/4gkWhk1xpB/H6HuNRC/fd2o177p7CJFCfxS6N367o/NFR/7qj5InC5lsLnV+VXMgVVb451wxrdOCbY9y6dX4u6M6IhYnSZY3ilnVr/uuxempQCynakDOVsr1urIm/o6TICkeOLWcnYavU3ZLa1lrbHYu8fR+Hm5qtQwnSp8a3xYJHTukmd8PfVCup/w3Tn7iUFX1McpJaX7FsAk38R7cKPXeYckaEwIAVcCBoHmVxzKw98i1jqOxb0TYMA8mI32PwAWv2r8YuzkTiCH7Ey1k7A6iQaSrJcnJUXzLjj27ks03LNUiV2aNRUvCb4o4nrbxZPOWMNKgqLZezqI+DhEZ/zuaiUs5HkzftHLe8voZjFlCJ9dRtR4Cf/scBfUOSNIpyCjfKIMBSviRSyZuGAhH4Da2sSolDD8dmrtvhifTFSMC0GCSqGSIb3DQEJFDEgHh4AYQBuAGQAcgBvAGkAZABkAGUAYgB1AGcAawBlAHkwIQYJKoZIhvcNAQkVMRQEElRpbWUgMTc5MzUxNTEyMTcyMjCCBDEGCSqGSIb3DQEHBqCCBCIwggQeAgEAMIIEFwYJKoZIhvcNAQcBMGYGCSqGSIb3DQEFDTBZMDgGCSqGSIb3DQEFDDArBBQVSWmXeNsx0xi12PEW3j+xK27r5gICJxACASAwDAYIKoZIhvcNAgkFADAdBglghkgBZQMEASoEEIpQ99jUP9OdsWJe5g0dwOOAggOgKJcfgKH4gn+qrNCKzF8VBRyWF5FHayp21T08IEDynK3qBo7TmAKG71RjeyFbcPTsY8C6Ol79GkIWgcTlmBPQR9KPljb117fU5tmQiXvNU8pDcANS5awPLAgR/B5BJ2QQZi1nq/4g5eF3U1plF5A2P0T2BXtGKRWvgcxddk/Gb33K5clexTPvGxb5FZ/oHayeiyUDJTHixeBYHJvsEH5ijlsSUiN7hBMmPukE8tRI+9JD5fZSe0hjcurs15RRLgYktMJVgLkn+U6X8gvWWuycAIorZt/MBGYUFEEgDGdEcfhbf6gSKonqpy5dKTzqnEOO0dpwvpcoykMftJnaqCei+9bAYRVh7btsRUamX5kj4EdCO72iMOSS7h2nddALLElRPlSk7zkoO1E8cUa5XM/W/ILeremyZwc7yJ4lz+j04DUxHxG/Q2h4QWf23+30b8tBsIqSsy5ERG65jtAoBzytaSg1TeXUT1eyolArQgjEbZKIHTKTCfwgtB6PR5OffAzYu2VdhQwtv1g23mQDKVEWyals6b32t6AW6oRiT9fQyvsdKLAY6FHdUVlc8k4Xg9/YuJg67YgqyJ/WHd/aZtt7gMxB/FnR/ser0Ly0ylAr1kemMaNPzRnS9nToxZrtoUfaxBPKxukHN/vsOErTiYWTaBTZvtgEAmH2Qc1soYLbiSL5/19pyuYEyT9grkKC4IZZwmXmOGGDepRFS+Fk8RnvQo8pNQkfsz7Z+a4kIvH4xJ/a4mdjagGJE1UssCDSQxJ1CJoJL8P0FuqrPoWifYk+70U798Uwu/lmwdJ2Y6j97ruFJoYTq49igU77EuhoL6ai/kELDH4CMJ90+BCMqB/Nu7MVs7v4MxoHdL5czjhqOS/4n5B4feppiZi4JNc5dOjLLoDAioiSbC/OVoTkW7H5AHvmqZ8/GqmPFjzXpUbSNdJSkWXW3CK7jez2vG7qt1sX8qv8kFGVM0ncyc5gaxdiSuwZR3C2fC2pNQwYIxclYtU7KXJer9Qrn0sv9Ro9ecfGp0Gqx0O/Q9o+SemS+N4lKrVeByHdQAdamcWJCzQi4MWzfpgcN9jwd38d1aRAnyIvue7CWpDLPoG8gu4jBehITyfnW1xPdBqFb5+4tcqO1AzoahPMJmTNYe6XN82atQO7zLsQuamzKgg/kAbvx5Oc5bXbiKg4gZo4WbYJOohcFmC1xO9mClBGolGLOJNp2tik0P1DtBO8mwtiDgpHcT8l+DBNMDEwDQYJYIZIAWUDBAIBBQAEIKAWRN8T0aZtrY1m+uVwG5qDOtmdMip7gya/ml0C0DQNBBQlp8MVA99Q2+OPVNfLVYhrkPWnAAICJxA=
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/AndroidManifest.xml')"
           cat > 'app/src/main/AndroidManifest.xml' <<'LEGENDAS_EOF_END'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+              <!-- Só rede (baixar modelos), serviço em segundo plano e manter o processador ligado.
+                   Não usa microfone, nem gravação de tela, nem sobreposição. -->
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.RECORD_AUDIO" />
-              <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
 
               <application
                   android:allowBackup="false"
                   android:label="@string/app_name"
-                  android:theme="@style/Theme.LegendasJP">
+                  android:theme="@style/Theme.LegendasTH">
 
                   <activity
                       android:name=".MainActivity"
@@ -138,10 +155,15 @@ jobs:
                       </intent-filter>
                   </activity>
 
+                  <activity
+                      android:name=".PlayerActivity"
+                      android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+                      android:exported="false" />
+
                   <service
-                      android:name=".CaptionService"
+                      android:name=".JobService"
                       android:exported="false"
-                      android:foregroundServiceType="mediaProjection" />
+                      android:foregroundServiceType="dataSync" />
               </application>
 
           </manifest>
@@ -150,38 +172,14 @@ jobs:
           cat > 'app/src/main/res/values/strings.xml' <<'LEGENDAS_EOF_END'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <string name="app_name">Legendas JP-EN</string>
-              <string name="title">Legendas japonês → inglês</string>
-              <string name="description">Reconhece a voz em japonês do que está tocando no celular (vídeos, streaming, etc.) e mostra a legenda traduzida para inglês sobre a tela.\n\nPasso 1: baixe os modelos (uma vez só, usa internet).\nPasso 2: toque em Iniciar legendas e abra o vídeo.</string>
-              <string name="btn_prepare">1. Baixar modelos</string>
-              <string name="btn_start">2. Iniciar legendas</string>
-              <string name="btn_stop">Parar legendas</string>
-
-              <string name="status_idle">Modelos ainda não baixados.</string>
-              <string name="status_ready">Modelos prontos. Toque em Iniciar legendas.</string>
-              <string name="status_downloading_vosk">Baixando modelo de voz japonesa… %1$d%%</string>
-              <string name="status_unpacking">Descompactando modelo de voz…</string>
-              <string name="status_downloading_translation">Baixando modelo de tradução…</string>
-              <string name="status_error">Erro: %1$s</string>
-              <string name="status_need_models">Baixe os modelos primeiro.</string>
-              <string name="status_need_overlay">Ative \"Exibir sobre outros apps\" para este app e volte aqui.</string>
-              <string name="status_denied">Permissão negada. Não é possível capturar o áudio.</string>
-              <string name="status_running">Legendas ativas. Abra o vídeo.</string>
-              <string name="status_stopped">Legendas paradas.</string>
-
-              <string name="notif_channel">Legendas</string>
-              <string name="notif_text">Gerando legendas do áudio do aparelho</string>
-              <string name="stop">Parar</string>
-              <string name="overlay_loading">Carregando…</string>
-              <string name="overlay_listening">Ouvindo…</string>
-              <string name="overlay_error">Erro: %1$s</string>
+              <string name="app_name">Legendas TH-EN</string>
           </resources>
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/res/values/themes.xml')"
           cat > 'app/src/main/res/values/themes.xml' <<'LEGENDAS_EOF_END'
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
-              <style name="Theme.LegendasJP" parent="Theme.MaterialComponents.DayNight.DarkActionBar" />
+              <style name="Theme.LegendasTH" parent="Theme.MaterialComponents.DayNight.DarkActionBar" />
           </resources>
           LEGENDAS_EOF_END
           mkdir -p "$(dirname 'app/src/main/res/layout/activity_main.xml')"
@@ -201,7 +199,7 @@ jobs:
                   <TextView
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
-                      android:text="@string/title"
+                      android:text="Legendas tailandês → inglês"
                       android:textSize="22sp"
                       android:textStyle="bold" />
 
@@ -209,7 +207,7 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="12dp"
-                      android:text="@string/description"
+                      android:text="Escolha um vídeo baixado no celular. O app escuta o áudio do arquivo, reconhece o tailandês, traduz para inglês e mostra o vídeo com as legendas. Também salva arquivos .srt na pasta Downloads/LegendasTH.\n\nNão usa microfone nem grava a tela. Tudo roda no aparelho."
                       android:textSize="15sp" />
 
                   <TextView
@@ -217,7 +215,6 @@ jobs:
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="20dp"
-                      android:text="@string/status_idle"
                       android:textSize="15sp"
                       android:textStyle="italic" />
 
@@ -231,183 +228,999 @@ jobs:
                       android:visibility="gone" />
 
                   <Button
-                      android:id="@+id/btnPrepare"
+                      android:id="@+id/btnModels"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="20dp"
-                      android:text="@string/btn_prepare" />
+                      android:text="1. Baixar modelos (cerca de 380 MB, uma vez)" />
 
                   <Button
-                      android:id="@+id/btnStart"
+                      android:id="@+id/btnPick"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="8dp"
-                      android:text="@string/btn_start" />
+                      android:text="2. Escolher vídeo e gerar legendas" />
 
                   <Button
-                      android:id="@+id/btnStop"
+                      android:id="@+id/btnCancel"
                       android:layout_width="match_parent"
                       android:layout_height="wrap_content"
                       android:layout_marginTop="8dp"
-                      android:text="@string/btn_stop" />
+                      android:text="Cancelar" />
+
+                  <Button
+                      android:id="@+id/btnOpen"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="8dp"
+                      android:text="Assistir com as últimas legendas" />
+
+                  <TextView
+                      android:id="@+id/tvLog"
+                      android:layout_width="match_parent"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="20dp"
+                      android:fontFamily="monospace"
+                      android:textSize="12sp" />
               </LinearLayout>
           </ScrollView>
           LEGENDAS_EOF_END
-          mkdir -p "$(dirname 'app/src/main/res/layout/overlay_caption.xml')"
-          cat > 'app/src/main/res/layout/overlay_caption.xml' <<'LEGENDAS_EOF_END'
+          mkdir -p "$(dirname 'app/src/main/res/layout/activity_player.xml')"
+          cat > 'app/src/main/res/layout/activity_player.xml' <<'LEGENDAS_EOF_END'
           <?xml version="1.0" encoding="utf-8"?>
-          <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+          <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
               android:layout_width="match_parent"
-              android:layout_height="wrap_content"
-              android:background="#B3000000"
-              android:orientation="vertical"
-              android:paddingStart="16dp"
-              android:paddingTop="8dp"
-              android:paddingEnd="16dp"
-              android:paddingBottom="8dp">
+              android:layout_height="match_parent"
+              android:background="#000000">
 
-              <TextView
-                  android:id="@+id/tvOriginal"
+              <VideoView
+                  android:id="@+id/video"
+                  android:layout_width="match_parent"
+                  android:layout_height="match_parent"
+                  android:layout_gravity="center" />
+
+              <LinearLayout
                   android:layout_width="match_parent"
                   android:layout_height="wrap_content"
-                  android:gravity="center"
-                  android:textColor="#BBBBBB"
-                  android:textSize="14sp" />
+                  android:layout_gravity="bottom"
+                  android:layout_marginBottom="72dp"
+                  android:gravity="center_horizontal"
+                  android:orientation="vertical"
+                  android:paddingStart="16dp"
+                  android:paddingEnd="16dp">
 
-              <TextView
-                  android:id="@+id/tvTranslated"
-                  android:layout_width="match_parent"
+                  <TextView
+                      android:id="@+id/tvEn"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:background="#99000000"
+                      android:gravity="center"
+                      android:paddingStart="10dp"
+                      android:paddingTop="4dp"
+                      android:paddingEnd="10dp"
+                      android:paddingBottom="4dp"
+                      android:textColor="#FFFFFF"
+                      android:textSize="18sp"
+                      android:textStyle="bold"
+                      android:visibility="gone" />
+
+                  <TextView
+                      android:id="@+id/tvTh"
+                      android:layout_width="wrap_content"
+                      android:layout_height="wrap_content"
+                      android:layout_marginTop="4dp"
+                      android:background="#99000000"
+                      android:ellipsize="end"
+                      android:gravity="center"
+                      android:maxLines="2"
+                      android:paddingStart="10dp"
+                      android:paddingTop="2dp"
+                      android:paddingEnd="10dp"
+                      android:paddingBottom="2dp"
+                      android:textColor="#CCCCCC"
+                      android:textSize="13sp"
+                      android:visibility="gone" />
+              </LinearLayout>
+
+              <CheckBox
+                  android:id="@+id/cbThai"
+                  android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:gravity="center"
-                  android:textColor="#FFFFFF"
-                  android:textSize="20sp"
-                  android:textStyle="bold" />
-          </LinearLayout>
+                  android:layout_gravity="top|end"
+                  android:layout_margin="8dp"
+                  android:checked="true"
+                  android:text="Mostrar tailandês"
+                  android:textColor="#FFFFFF" />
+          </FrameLayout>
           LEGENDAS_EOF_END
-          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasjp/ModelManager.kt')"
-          cat > 'app/src/main/java/com/example/legendasjp/ModelManager.kt' <<'LEGENDAS_EOF_END'
-          package com.example.legendasjp
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/Cue.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/Cue.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
 
           import android.content.Context
-          import com.google.android.gms.tasks.Tasks
-          import com.google.mlkit.common.model.DownloadConditions
-          import com.google.mlkit.nl.translate.TranslateLanguage
-          import com.google.mlkit.nl.translate.Translation
-          import com.google.mlkit.nl.translate.TranslatorOptions
           import java.io.File
+          import java.util.Locale
+
+          /** Uma legenda: tempos em milissegundos, texto original (tailandês) e tradução (inglês). */
+          data class Cue(val startMs: Long, val endMs: Long, val th: String, val en: String)
+
+          object Subtitles {
+              private const val LINE_CHARS = 42
+
+              fun clock(ms: Long): String {
+                  val total = ms / 1000
+                  return String.format(Locale.US, "%02d:%02d", total / 60, total % 60)
+              }
+
+              /** O Whisper às vezes inventa texto repetido em trechos sem fala clara. Descarta esses casos. */
+              fun looksLikeHallucination(text: String): Boolean {
+                  val t = text.filter { !it.isWhitespace() }
+                  if (t.isEmpty()) return true
+                  if (t.none { it.isLetterOrDigit() }) return true
+                  if (t.length >= 8 && t.toSet().size <= 2) return true
+                  return isRepeated(t)
+              }
+
+              private fun isRepeated(s: String): Boolean {
+                  if (s.length < 10) return false
+                  for (unit in 1..15) {
+                      if (unit * 4 > s.length) break
+                      val u = s.substring(0, unit)
+                      var count = 0
+                      var i = 0
+                      while (i + unit <= s.length && s.startsWith(u, i)) {
+                          count++
+                          i += unit
+                      }
+                      if (count >= 4 && count * unit >= s.length * 0.8) return true
+                  }
+                  return false
+              }
+
+              /** Quebra o texto em legendas de até 2 linhas de 42 caracteres. */
+              fun splitEnglish(text: String): List<String> {
+                  val words = text.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+                  if (words.isEmpty()) return listOf("")
+                  val lines = ArrayList<String>()
+                  var cur = StringBuilder()
+                  for (w in words) {
+                      if (cur.isNotEmpty() && cur.length + 1 + w.length > LINE_CHARS) {
+                          lines.add(cur.toString())
+                          cur = StringBuilder()
+                      }
+                      if (cur.isNotEmpty()) cur.append(' ')
+                      cur.append(w)
+                  }
+                  if (cur.isNotEmpty()) lines.add(cur.toString())
+                  val result = ArrayList<String>()
+                  var i = 0
+                  while (i < lines.size) {
+                      result.add(if (i + 1 < lines.size) lines[i] + "\n" + lines[i + 1] else lines[i])
+                      i += 2
+                  }
+                  return result
+              }
+
+              /** Divide legendas longas em várias, repartindo o tempo pelo tamanho do texto. */
+              fun expand(cues: List<Cue>): List<Cue> {
+                  val out = ArrayList<Cue>()
+                  for (c in cues) {
+                      val parts = splitEnglish(c.en)
+                      if (parts.size <= 1) {
+                          out.add(c)
+                          continue
+                      }
+                      val total = parts.sumOf { it.length }.coerceAtLeast(1)
+                      val dur = (c.endMs - c.startMs).coerceAtLeast(1L)
+                      var acc = 0
+                      var cursor = c.startMs
+                      for ((i, p) in parts.withIndex()) {
+                          acc += p.length
+                          val end = if (i == parts.lastIndex) c.endMs else c.startMs + dur * acc / total
+                          out.add(Cue(cursor, end, c.th, p))
+                          cursor = end
+                      }
+                  }
+                  return out
+              }
+
+              private fun stamp(ms: Long): String {
+                  val h = ms / 3_600_000
+                  val m = ms / 60_000 % 60
+                  val s = ms / 1000 % 60
+                  val milli = ms % 1000
+                  return String.format(Locale.US, "%02d:%02d:%02d,%03d", h, m, s, milli)
+              }
+
+              fun toSrt(cues: List<Cue>, pick: (Cue) -> String): String {
+                  val sb = StringBuilder()
+                  var n = 1
+                  for (c in cues) {
+                      val text = pick(c).trim()
+                      if (text.isEmpty()) continue
+                      sb.append(n++).append('\n')
+                      sb.append(stamp(c.startMs)).append(" --> ").append(stamp(maxOf(c.endMs, c.startMs + 500))).append('\n')
+                      sb.append(text).append("\n\n")
+                  }
+                  return sb.toString()
+              }
+          }
+
+          /** Guarda as legendas da última análise (uma por linha, enquanto são geradas). */
+          object CueStore {
+              private const val FILE = "last_cues.tsv"
+
+              class Saved(val videoUri: String, val videoName: String, val cues: List<Cue>)
+
+              private fun clean(s: String) = s.replace('\t', ' ').replace('\n', ' ').replace('\r', ' ')
+
+              fun begin(context: Context, videoUri: String, videoName: String) {
+                  File(context.filesDir, FILE).writeText("#" + clean(videoUri) + "\t" + clean(videoName) + "\n")
+              }
+
+              fun append(context: Context, cue: Cue) {
+                  File(context.filesDir, FILE).appendText(
+                      "${cue.startMs}\t${cue.endMs}\t${clean(cue.th)}\t${clean(cue.en)}\n"
+                  )
+              }
+
+              fun exists(context: Context): Boolean {
+                  val f = File(context.filesDir, FILE)
+                  return f.exists() && f.length() > 0
+              }
+
+              fun load(context: Context): Saved? {
+                  val f = File(context.filesDir, FILE)
+                  if (!f.exists()) return null
+                  val lines = f.readLines()
+                  if (lines.isEmpty() || !lines[0].startsWith("#")) return null
+                  val head = lines[0].substring(1).split('\t')
+                  if (head.isEmpty()) return null
+                  val cues = ArrayList<Cue>()
+                  for (i in 1 until lines.size) {
+                      val p = lines[i].split('\t', limit = 4)
+                      if (p.size < 4) continue
+                      val a = p[0].toLongOrNull() ?: continue
+                      val b = p[1].toLongOrNull() ?: continue
+                      cues.add(Cue(a, b, p[2], p[3]))
+                  }
+                  return Saved(head[0], if (head.size > 1) head[1] else "vídeo", cues)
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/AudioDecoder.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/AudioDecoder.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          import android.content.Context
+          import android.media.AudioFormat
+          import android.media.MediaCodec
+          import android.media.MediaExtractor
+          import android.media.MediaFormat
+          import android.net.Uri
+          import java.nio.ByteOrder
+
+          /**
+           * Converte um fluxo de amostras mono para 16 kHz fazendo a média das amostras de entrada
+           * que cabem em cada amostra de saída (um filtro simples que evita chiado ao reduzir a taxa).
+           */
+          class MonoResampler(inRate: Int, outRate: Int, private val sink: (FloatArray, Int) -> Unit) {
+              private val ratio = inRate.toDouble() / outRate
+              private var acc = 0.0
+              private var filled = 0.0
+              private val buf = FloatArray(16_000)
+              private var n = 0
+
+              fun push(x: Float) {
+                  var w = 1.0
+                  while (w > 1e-9) {
+                      val need = ratio - filled
+                      if (w < need - 1e-9) {
+                          acc += x * w
+                          filled += w
+                          w = 0.0
+                      } else {
+                          acc += x * need
+                          w -= need
+                          buf[n++] = (acc / ratio).toFloat()
+                          acc = 0.0
+                          filled = 0.0
+                          if (n == buf.size) flush()
+                      }
+                  }
+              }
+
+              fun flush() {
+                  if (n > 0) {
+                      sink(buf, n)
+                      n = 0
+                  }
+              }
+          }
+
+          object AudioDecoder {
+              const val OUT_RATE = 16_000
+
+              class NoAudioException : Exception("Este vídeo não tem faixa de áudio.")
+
+              /**
+               * Decodifica o áudio do vídeo para 16 kHz mono e entrega em pedaços para [onSamples].
+               * O array entregue é reaproveitado: quem receber deve copiar o que precisar guardar.
+               */
+              fun decode(
+                  context: Context,
+                  uri: Uri,
+                  isCancelled: () -> Boolean,
+                  onProgress: (Float) -> Unit,
+                  onSamples: (FloatArray, Int) -> Unit
+              ) {
+                  val extractor = MediaExtractor()
+                  var codec: MediaCodec? = null
+                  try {
+                      extractor.setDataSource(context, uri, null)
+
+                      var trackIndex = -1
+                      var found: MediaFormat? = null
+                      for (i in 0 until extractor.trackCount) {
+                          val f = extractor.getTrackFormat(i)
+                          val mime = f.getString(MediaFormat.KEY_MIME) ?: continue
+                          if (mime.startsWith("audio/")) {
+                              trackIndex = i
+                              found = f
+                              break
+                          }
+                      }
+                      val format: MediaFormat = found ?: throw NoAudioException()
+                      extractor.selectTrack(trackIndex)
+
+                      val mime = format.getString(MediaFormat.KEY_MIME) ?: throw NoAudioException()
+                      val durationUs =
+                          if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else 0L
+
+                      val c = MediaCodec.createDecoderByType(mime)
+                      codec = c
+                      c.configure(format, null, null, 0)
+                      c.start()
+
+                      var sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                      var channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                      var floatPcm = false
+                      var resampler = MonoResampler(sampleRate, OUT_RATE, onSamples)
+
+                      val info = MediaCodec.BufferInfo()
+                      var inputDone = false
+                      var outputDone = false
+
+                      while (!outputDone) {
+                          if (isCancelled()) break
+
+                          if (!inputDone) {
+                              val inIdx = c.dequeueInputBuffer(10_000)
+                              if (inIdx >= 0) {
+                                  val inBuf = c.getInputBuffer(inIdx)
+                                  val size = if (inBuf != null) extractor.readSampleData(inBuf, 0) else -1
+                                  if (size < 0) {
+                                      c.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                                      inputDone = true
+                                  } else {
+                                      val t = extractor.sampleTime
+                                      c.queueInputBuffer(inIdx, 0, size, t, 0)
+                                      if (durationUs > 0 && t >= 0) {
+                                          onProgress((t.toFloat() / durationUs).coerceIn(0f, 1f))
+                                      }
+                                      extractor.advance()
+                                  }
+                              }
+                          }
+
+                          val outIdx = c.dequeueOutputBuffer(info, 10_000)
+                          if (outIdx >= 0) {
+                              val out = c.getOutputBuffer(outIdx)
+                              if (out != null && info.size > 0) {
+                                  out.position(info.offset)
+                                  out.limit(info.offset + info.size)
+                                  out.order(ByteOrder.nativeOrder())
+                                  if (floatPcm) {
+                                      val fb = out.asFloatBuffer()
+                                      val total = fb.remaining()
+                                      var i = 0
+                                      while (i + channels <= total) {
+                                          var sum = 0f
+                                          for (ch in 0 until channels) sum += fb.get(i + ch)
+                                          resampler.push(sum / channels)
+                                          i += channels
+                                      }
+                                  } else {
+                                      val sb = out.asShortBuffer()
+                                      val total = sb.remaining()
+                                      var i = 0
+                                      while (i + channels <= total) {
+                                          var sum = 0
+                                          for (ch in 0 until channels) sum += sb.get(i + ch).toInt()
+                                          resampler.push(sum / (32768f * channels))
+                                          i += channels
+                                      }
+                                  }
+                              }
+                              c.releaseOutputBuffer(outIdx, false)
+                              if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) outputDone = true
+                          } else if (outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                              val nf = c.outputFormat
+                              channels = nf.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                              floatPcm = nf.containsKey(MediaFormat.KEY_PCM_ENCODING) &&
+                                  nf.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
+                              val newRate = nf.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                              if (newRate != sampleRate) {
+                                  resampler.flush()
+                                  sampleRate = newRate
+                                  resampler = MonoResampler(newRate, OUT_RATE, onSamples)
+                              }
+                          }
+                      }
+                      resampler.flush()
+                      onProgress(1f)
+                  } finally {
+                      try { codec?.stop() } catch (ignored: Exception) {}
+                      try { codec?.release() } catch (ignored: Exception) {}
+                      try { extractor.release() } catch (ignored: Exception) {}
+                  }
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/ModelManager.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/ModelManager.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          import android.content.Context
+          import java.io.File
+          import java.io.FileOutputStream
           import java.io.IOException
           import java.net.HttpURLConnection
           import java.net.URL
-          import java.util.zip.ZipInputStream
 
-          /** Baixa e prepara os dois modelos: voz japonesa (Vosk) e tradução ja -> en (ML Kit). */
+          /** Baixa os modelos: Whisper "small" (voz), detector de fala Silero e o dicionário de tokens. */
           object ModelManager {
 
-              private const val MODEL_NAME = "vosk-model-small-ja-0.22"
-              private const val MODEL_URL = "https://alphacephei.com/vosk/models/$MODEL_NAME.zip"
-              private const val OK_MARKER = ".ok"
+              const val ENCODER = "small-encoder.int8.onnx"
+              const val DECODER = "small-decoder.int8.onnx"
+              const val TOKENS = "small-tokens.txt"
+              const val VAD = "silero_vad.onnx"
 
-              fun voskModelDir(context: Context): File = File(context.filesDir, MODEL_NAME)
+              private const val OK = ".ok"
+              private const val WHISPER_BASE =
+                  "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main/"
+              private const val VAD_URL =
+                  "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
 
-              fun voskReady(context: Context): Boolean = File(voskModelDir(context), OK_MARKER).exists()
+              private class Item(val name: String, val url: String, val label: String, val minBytes: Long)
 
-              /** Baixa o zip do modelo (cerca de 48 MB) e descompacta. Chamar fora da thread principal. */
-              fun downloadVosk(context: Context, onProgress: (Int) -> Unit, onUnpacking: () -> Unit) {
-                  val zipFile = File(context.cacheDir, "$MODEL_NAME.zip")
+              private val items = listOf(
+                  Item(VAD, VAD_URL, "detector de fala", 500_000L),
+                  Item(TOKENS, WHISPER_BASE + TOKENS, "dicionário", 500_000L),
+                  Item(ENCODER, WHISPER_BASE + ENCODER, "modelo de voz (parte 1)", 100_000_000L),
+                  Item(DECODER, WHISPER_BASE + DECODER, "modelo de voz (parte 2)", 250_000_000L)
+              )
 
-                  val conn = URL(MODEL_URL).openConnection() as HttpURLConnection
-                  conn.connectTimeout = 15_000
-                  conn.readTimeout = 30_000
-                  conn.connect()
-                  if (conn.responseCode != HttpURLConnection.HTTP_OK) {
-                      throw IOException("HTTP ${conn.responseCode}")
+              fun dir(context: Context): File = File(context.filesDir, "whisper-small")
+
+              fun ready(context: Context): Boolean = File(dir(context), OK).exists()
+
+              /** Baixa tudo que falta. Se a conexão cair, a próxima tentativa continua de onde parou. */
+              fun download(context: Context, onProgress: (String, Int) -> Unit) {
+                  val dir = dir(context)
+                  dir.mkdirs()
+                  if (dir.usableSpace < 450_000_000L) {
+                      throw IOException("Pouco espaço livre no celular (precisa de cerca de 450 MB).")
                   }
-                  val total = conn.contentLengthLong
+                  for ((index, item) in items.withIndex()) {
+                      val title = "Baixando ${item.label} (${index + 1}/${items.size})"
+                      fetch(item, dir) { pct -> onProgress(title, pct) }
+                  }
+                  File(dir, OK).writeText("ok")
+              }
 
+              private fun fetch(item: Item, dir: File, onPercent: (Int) -> Unit) {
+                  val target = File(dir, item.name)
+                  if (target.exists() && target.length() >= item.minBytes) {
+                      onPercent(100)
+                      return
+                  }
+                  val part = File(dir, item.name + ".part")
+                  val have = if (part.exists()) part.length() else 0L
+
+                  val conn = URL(item.url).openConnection() as HttpURLConnection
+                  conn.connectTimeout = 20_000
+                  conn.readTimeout = 30_000
+                  conn.instanceFollowRedirects = true
+                  if (have > 0) conn.setRequestProperty("Range", "bytes=$have-")
+                  conn.connect()
+
+                  val code = conn.responseCode
+                  val append: Boolean
+                  val total: Long
+                  when (code) {
+                      HttpURLConnection.HTTP_PARTIAL -> {
+                          append = true
+                          total = have + conn.contentLengthLong
+                      }
+                      HttpURLConnection.HTTP_OK -> {
+                          append = false
+                          total = conn.contentLengthLong
+                      }
+                      416 -> {
+                          if (have >= item.minBytes) {
+                              part.renameTo(target)
+                              onPercent(100)
+                              return
+                          }
+                          part.delete()
+                          throw IOException("Download interrompido. Toque em baixar de novo.")
+                      }
+                      else -> throw IOException("Falha ao baixar ${item.name} (HTTP $code)")
+                  }
+
+                  var done = if (append) have else 0L
+                  var lastPct = -1
                   conn.inputStream.use { input ->
-                      zipFile.outputStream().use { output ->
-                          val buffer = ByteArray(64 * 1024)
-                          var done = 0L
-                          var lastPercent = -1
+                      FileOutputStream(part, append).use { output ->
+                          val buffer = ByteArray(128 * 1024)
                           while (true) {
                               val n = input.read(buffer)
                               if (n < 0) break
                               output.write(buffer, 0, n)
                               done += n
                               if (total > 0) {
-                                  val percent = (done * 100 / total).toInt()
-                                  if (percent != lastPercent) {
-                                      lastPercent = percent
-                                      onProgress(percent)
+                                  val pct = (done * 100 / total).toInt()
+                                  if (pct != lastPct) {
+                                      lastPct = pct
+                                      onPercent(pct)
                                   }
                               }
                           }
                       }
                   }
+                  conn.disconnect()
 
-                  onUnpacking()
-                  voskModelDir(context).deleteRecursively()
-                  unzip(zipFile, context.filesDir)
-                  zipFile.delete()
-
-                  val dir = voskModelDir(context)
-                  if (!dir.isDirectory) throw IOException("Modelo descompactado não encontrado")
-                  File(dir, OK_MARKER).writeText("ok")
-              }
-
-              private fun unzip(zip: File, targetDir: File) {
-                  val targetPath = targetDir.canonicalPath + File.separator
-                  ZipInputStream(zip.inputStream().buffered()).use { zis ->
-                      while (true) {
-                          val entry = zis.nextEntry ?: break
-                          val outFile = File(targetDir, entry.name)
-                          // Proteção contra "zip slip"
-                          if (!outFile.canonicalPath.startsWith(targetPath)) {
-                              throw IOException("Entrada inválida no zip: ${entry.name}")
-                          }
-                          if (entry.isDirectory) {
-                              outFile.mkdirs()
-                          } else {
-                              outFile.parentFile?.mkdirs()
-                              outFile.outputStream().use { out -> zis.copyTo(out) }
-                          }
-                          zis.closeEntry()
-                      }
+                  if (total > 0 && part.length() < total) {
+                      throw IOException("Download incompleto de ${item.name}. Toque em baixar de novo.")
                   }
-              }
-
-              /** Baixa o modelo de tradução ja -> en (cerca de 30 MB), se ainda não estiver no aparelho. */
-              fun downloadTranslation() {
-                  val translator = Translation.getClient(
-                      TranslatorOptions.Builder()
-                          .setSourceLanguage(TranslateLanguage.JAPANESE)
-                          .setTargetLanguage(TranslateLanguage.ENGLISH)
-                          .build()
-                  )
-                  try {
-                      Tasks.await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build()))
-                  } finally {
-                      translator.close()
+                  if (part.length() < item.minBytes) {
+                      part.delete()
+                      throw IOException("Arquivo ${item.name} veio incompleto. Toque em baixar de novo.")
                   }
+                  target.delete()
+                  if (!part.renameTo(target)) throw IOException("Não foi possível salvar ${item.name}")
+                  onPercent(100)
               }
           }
           LEGENDAS_EOF_END
-          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasjp/MainActivity.kt')"
-          cat > 'app/src/main/java/com/example/legendasjp/MainActivity.kt' <<'LEGENDAS_EOF_END'
-          package com.example.legendasjp
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/SubtitleEngine.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/SubtitleEngine.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
 
-          import android.Manifest
-          import android.content.Intent
-          import android.content.pm.PackageManager
-          import android.media.projection.MediaProjectionManager
+          import android.content.Context
           import android.net.Uri
-          import android.os.Build
+          import com.google.android.gms.tasks.Tasks
+          import com.google.mlkit.common.model.DownloadConditions
+          import com.google.mlkit.nl.translate.TranslateLanguage
+          import com.google.mlkit.nl.translate.Translation
+          import com.google.mlkit.nl.translate.Translator
+          import com.google.mlkit.nl.translate.TranslatorOptions
+          import com.k2fsa.sherpa.onnx.OfflineModelConfig
+          import com.k2fsa.sherpa.onnx.OfflineRecognizer
+          import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
+          import com.k2fsa.sherpa.onnx.OfflineWhisperModelConfig
+          import com.k2fsa.sherpa.onnx.SileroVadModelConfig
+          import com.k2fsa.sherpa.onnx.Vad
+          import com.k2fsa.sherpa.onnx.VadModelConfig
+          import java.io.File
+
+          /**
+           * Fluxo completo: áudio do vídeo -> detector de fala (separa os trechos com voz)
+           * -> Whisper em tailandês -> tradução para inglês -> lista de legendas com tempos.
+           */
+          class SubtitleEngine(private val context: Context) {
+
+              private var recognizer: OfflineRecognizer? = null
+              private var vad: Vad? = null
+              private var translator: Translator? = null
+
+              /** Carrega os modelos (demora alguns segundos). Chamar fora da thread principal. */
+              fun open() {
+                  val dir = ModelManager.dir(context)
+                  val threads = Runtime.getRuntime().availableProcessors().coerceIn(2, 4)
+
+                  val whisper = OfflineWhisperModelConfig()
+                  whisper.encoder = File(dir, ModelManager.ENCODER).absolutePath
+                  whisper.decoder = File(dir, ModelManager.DECODER).absolutePath
+                  whisper.language = "th"
+                  whisper.task = "transcribe"
+
+                  val modelConfig = OfflineModelConfig()
+                  modelConfig.whisper = whisper
+                  modelConfig.tokens = File(dir, ModelManager.TOKENS).absolutePath
+                  modelConfig.numThreads = threads
+                  modelConfig.provider = "cpu"
+                  modelConfig.debug = false
+
+                  val config = OfflineRecognizerConfig()
+                  config.modelConfig = modelConfig
+                  config.decodingMethod = "greedy_search"
+                  recognizer = OfflineRecognizer(config = config)
+
+                  val silero = SileroVadModelConfig()
+                  silero.model = File(dir, ModelManager.VAD).absolutePath
+                  silero.threshold = 0.5f
+                  silero.minSilenceDuration = 0.4f
+                  silero.minSpeechDuration = 0.25f
+                  silero.windowSize = 512
+                  silero.maxSpeechDuration = 25f // o Whisper lê no máximo 30 s por vez
+
+                  val vadConfig = VadModelConfig()
+                  vadConfig.sileroVadModelConfig = silero
+                  vadConfig.sampleRate = AudioDecoder.OUT_RATE
+                  vadConfig.numThreads = 1
+                  vadConfig.provider = "cpu"
+                  vad = Vad(config = vadConfig)
+
+                  val tr = Translation.getClient(
+                      TranslatorOptions.Builder()
+                          .setSourceLanguage(TranslateLanguage.THAI)
+                          .setTargetLanguage(TranslateLanguage.ENGLISH)
+                          .build()
+                  )
+                  Tasks.await(tr.downloadModelIfNeeded(DownloadConditions.Builder().build()))
+                  translator = tr
+              }
+
+              /**
+               * Analisa o vídeo inteiro. [onCue] é chamado a cada legenda pronta, na ordem do vídeo.
+               * Chamar fora da thread principal.
+               */
+              fun run(
+                  uri: Uri,
+                  isCancelled: () -> Boolean,
+                  onProgress: (Int) -> Unit,
+                  onCue: (Cue) -> Unit
+              ): List<Cue> {
+                  val rec = recognizer ?: throw IllegalStateException("Modelo não carregado")
+                  val detector = vad ?: throw IllegalStateException("Modelo não carregado")
+                  val cues = ArrayList<Cue>()
+                  val rate = AudioDecoder.OUT_RATE
+
+                  fun drain() {
+                      while (!detector.empty()) {
+                          val seg = detector.front()
+                          detector.pop()
+                          val startMs = seg.start * 1000L / rate
+                          val endMs = startMs + seg.samples.size * 1000L / rate
+                          val th = decodeSegment(rec, seg.samples)
+                          if (Subtitles.looksLikeHallucination(th)) continue
+                          val cue = Cue(startMs, endMs, th, translate(th))
+                          cues.add(cue)
+                          onCue(cue)
+                      }
+                  }
+
+                  var lastPct = -1
+                  AudioDecoder.decode(
+                      context,
+                      uri,
+                      isCancelled,
+                      onProgress = { f ->
+                          val pct = (f * 100).toInt()
+                          if (pct != lastPct) {
+                              lastPct = pct
+                              onProgress(pct)
+                          }
+                      },
+                      onSamples = { buf, n ->
+                          detector.acceptWaveform(buf.copyOf(n))
+                          drain()
+                      }
+                  )
+                  if (!isCancelled()) {
+                      detector.flush()
+                      drain()
+                  }
+                  return cues
+              }
+
+              private fun decodeSegment(rec: OfflineRecognizer, samples: FloatArray): String {
+                  val stream = rec.createStream()
+                  try {
+                      stream.acceptWaveform(samples, AudioDecoder.OUT_RATE)
+                      rec.decode(stream)
+                      return rec.getResult(stream).text.trim()
+                  } finally {
+                      stream.release()
+                  }
+              }
+
+              private fun translate(text: String): String {
+                  val tr = translator ?: return ""
+                  return try {
+                      Tasks.await(tr.translate(text)).trim()
+                  } catch (e: Exception) {
+                      ""
+                  }
+              }
+
+              fun close() {
+                  try { recognizer?.release() } catch (ignored: Throwable) {}
+                  try { vad?.release() } catch (ignored: Throwable) {}
+                  try { translator?.close() } catch (ignored: Throwable) {}
+                  recognizer = null
+                  vad = null
+                  translator = null
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/JobService.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/JobService.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          import android.app.Notification
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.app.PendingIntent
+          import android.app.Service
+          import android.content.ContentValues
+          import android.content.Intent
+          import android.content.pm.ServiceInfo
+          import android.net.Uri
+          import android.os.Environment
+          import android.os.Handler
+          import android.os.IBinder
+          import android.os.Looper
+          import android.os.PowerManager
+          import android.os.SystemClock
+          import android.provider.MediaStore
+          import android.provider.OpenableColumns
+          import androidx.core.app.NotificationCompat
+          import androidx.core.app.ServiceCompat
+
+          /** Estado do trabalho em andamento, lido pela tela principal. */
+          object JobState {
+              @Volatile var busy = false
+              @Volatile var status = ""
+              @Volatile var percent = -1
+              @Volatile var log: List<String> = emptyList()
+              @Volatile var onChange: (() -> Unit)? = null
+
+              private val main = Handler(Looper.getMainLooper())
+
+              fun changed() {
+                  main.post { onChange?.invoke() }
+              }
+          }
+
+          /**
+           * Faz o trabalho pesado (baixar modelos ou analisar um vídeo) em primeiro plano,
+           * para o Android não encerrar o app quando você sair da tela ou apagar a tela.
+           */
+          class JobService : Service() {
+
+              companion object {
+                  const val ACTION_DOWNLOAD = "com.example.legendasth.DOWNLOAD"
+                  const val ACTION_ANALYZE = "com.example.legendasth.ANALYZE"
+                  const val ACTION_CANCEL = "com.example.legendasth.CANCEL"
+                  private const val CHANNEL = "job"
+                  private const val NOTIF_ID = 1
+              }
+
+              @Volatile private var cancelled = false
+              private var wakeLock: PowerManager.WakeLock? = null
+
+              override fun onBind(intent: Intent?): IBinder? = null
+
+              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  val action = intent?.action
+                  if (action == ACTION_CANCEL) {
+                      cancelled = true
+                      if (!JobState.busy) stopSelf()
+                      return START_NOT_STICKY
+                  }
+
+                  enterForeground("Preparando…")
+                  if (JobState.busy) return START_NOT_STICKY
+
+                  when (action) {
+                      ACTION_DOWNLOAD -> launch { downloadModels() }
+                      ACTION_ANALYZE -> {
+                          val uri = intent?.data
+                          if (uri == null) {
+                              stopForeground(STOP_FOREGROUND_REMOVE)
+                              stopSelf()
+                          } else {
+                              launch { analyze(uri) }
+                          }
+                      }
+                      else -> {
+                          stopForeground(STOP_FOREGROUND_REMOVE)
+                          stopSelf()
+                      }
+                  }
+                  return START_NOT_STICKY
+              }
+
+              private fun launch(block: () -> Unit) {
+                  JobState.busy = true
+                  cancelled = false
+                  acquireWakeLock()
+                  Thread {
+                      try {
+                          block()
+                      } catch (t: Throwable) {
+                          JobState.status = "Erro: " + (t.message ?: t.javaClass.simpleName)
+                          JobState.percent = -1
+                      } finally {
+                          releaseWakeLock()
+                          JobState.busy = false
+                          JobState.changed()
+                          stopForeground(STOP_FOREGROUND_REMOVE)
+                          stopSelf()
+                      }
+                  }.start()
+              }
+
+              private fun acquireWakeLock() {
+                  val pm = getSystemService(PowerManager::class.java)
+                  val wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "legendasth:job")
+                  wl.acquire(4 * 60 * 60 * 1000L)
+                  wakeLock = wl
+              }
+
+              private fun releaseWakeLock() {
+                  try {
+                      val wl = wakeLock
+                      if (wl != null && wl.isHeld) wl.release()
+                  } catch (ignored: Exception) {
+                  }
+                  wakeLock = null
+              }
+
+              // ---------------------------------------------------------------- trabalhos
+
+              private fun post(status: String, percent: Int) {
+                  JobState.status = status
+                  JobState.percent = percent
+                  JobState.changed()
+                  getSystemService(NotificationManager::class.java).notify(NOTIF_ID, buildNotification(status, percent))
+              }
+
+              private fun downloadModels() {
+                  post("Baixando modelos…", 0)
+                  ModelManager.download(this) { label, pct -> post("$label: $pct%", pct) }
+                  post("Modelos prontos. Agora escolha um vídeo.", -1)
+              }
+
+              private fun analyze(uri: Uri) {
+                  val name = displayName(uri)
+                  val base = name.substringBeforeLast('.', name).replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                  JobState.log = emptyList()
+                  CueStore.begin(this, uri.toString(), name)
+
+                  post("Carregando os modelos…", -1)
+                  val engine = SubtitleEngine(applicationContext)
+                  val startedAt = SystemClock.elapsedRealtime()
+                  var count = 0
+                  val recent = ArrayList<String>()
+                  try {
+                      engine.open()
+                      post("Analisando o áudio…", 0)
+
+                      val cues = engine.run(
+                          uri,
+                          isCancelled = { cancelled },
+                          onProgress = { pct ->
+                              val elapsed = (SystemClock.elapsedRealtime() - startedAt) / 1000
+                              val eta = if (pct >= 2) " · faltam cerca de ${(elapsed * (100 - pct) / pct / 60) + 1} min" else ""
+                              post("Analisando o áudio… $pct% · $count trechos$eta", pct)
+                          },
+                          onCue = { cue ->
+                              count++
+                              CueStore.append(this, cue)
+                              recent.add("[${Subtitles.clock(cue.startMs)}] ${cue.th}\n  → ${cue.en}")
+                              while (recent.size > 6) recent.removeAt(0)
+                              JobState.log = ArrayList(recent)
+                              JobState.changed()
+                          }
+                      )
+
+                      if (cancelled) {
+                          post("Cancelado. ${cues.size} legendas parciais ficaram salvas.", -1)
+                          return
+                      }
+                      if (cues.isEmpty()) {
+                          post("Não encontrei fala em tailandês neste vídeo.", -1)
+                          return
+                      }
+
+                      val where = saveSrtFiles(base, cues)
+                      post("Pronto! ${cues.size} legendas. $where", -1)
+                  } finally {
+                      engine.close()
+                  }
+              }
+
+              private fun saveSrtFiles(base: String, cues: List<Cue>): String {
+                  val en = Subtitles.toSrt(Subtitles.expand(cues)) { it.en }
+                  val th = Subtitles.toSrt(cues) { it.th }
+                  val ok1 = saveText("$base.en.srt", en)
+                  val ok2 = saveText("$base.th.srt", th)
+                  return if (ok1 && ok2) "Arquivos .srt salvos em Downloads/LegendasTH." else "Não consegui salvar os .srt."
+              }
+
+              private fun saveText(fileName: String, content: String): Boolean {
+                  return try {
+                      val values = ContentValues().apply {
+                          put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                          put(MediaStore.MediaColumns.MIME_TYPE, "application/x-subrip")
+                          put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/LegendasTH")
+                      }
+                      val target = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return false
+                      val out = contentResolver.openOutputStream(target) ?: return false
+                      out.use { it.write(content.toByteArray(Charsets.UTF_8)) }
+                      true
+                  } catch (e: Exception) {
+                      false
+                  }
+              }
+
+              private fun displayName(uri: Uri): String {
+                  try {
+                      contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                          if (c.moveToFirst()) {
+                              val n = c.getString(0)
+                              if (!n.isNullOrEmpty()) return n
+                          }
+                      }
+                  } catch (ignored: Exception) {
+                  }
+                  return "video"
+              }
+
+              // ------------------------------------------------------------- notificação
+
+              private fun buildNotification(text: String, percent: Int): Notification {
+                  val open = PendingIntent.getActivity(
+                      this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE
+                  )
+                  val builder = NotificationCompat.Builder(this, CHANNEL)
+                      .setSmallIcon(android.R.drawable.stat_notify_sync)
+                      .setContentTitle(getString(R.string.app_name))
+                      .setContentText(text)
+                      .setOngoing(true)
+                      .setOnlyAlertOnce(true)
+                      .setContentIntent(open)
+                  if (percent in 0..100) builder.setProgress(100, percent, false) else builder.setProgress(0, 0, true)
+                  return builder.build()
+              }
+
+              private fun enterForeground(text: String) {
+                  val nm = getSystemService(NotificationManager::class.java)
+                  nm.createNotificationChannel(
+                      NotificationChannel(CHANNEL, "Legendas", NotificationManager.IMPORTANCE_LOW)
+                  )
+                  ServiceCompat.startForeground(
+                      this, NOTIF_ID, buildNotification(text, -1), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                  )
+              }
+          }
+          LEGENDAS_EOF_END
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/MainActivity.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/MainActivity.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
+
+          import android.content.Intent
+          import android.net.Uri
           import android.os.Bundle
-          import android.provider.Settings
           import android.view.View
           import android.widget.Button
           import android.widget.ProgressBar
           import android.widget.TextView
+          import android.widget.Toast
           import androidx.activity.result.contract.ActivityResultContracts
           import androidx.appcompat.app.AppCompatActivity
           import androidx.core.content.ContextCompat
@@ -415,30 +1228,16 @@ jobs:
           class MainActivity : AppCompatActivity() {
 
               private lateinit var tvStatus: TextView
+              private lateinit var tvLog: TextView
               private lateinit var progress: ProgressBar
-              private lateinit var btnPrepare: Button
+              private lateinit var btnModels: Button
+              private lateinit var btnPick: Button
+              private lateinit var btnCancel: Button
+              private lateinit var btnOpen: Button
 
-              private var askedPermissions = false
-
-              private val projectionLauncher =
-                  registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-                      val data = result.data
-                      if (result.resultCode == RESULT_OK && data != null) {
-                          val intent = Intent(this, CaptionService::class.java).apply {
-                              action = CaptionService.ACTION_START
-                              putExtra(CaptionService.EXTRA_RESULT_CODE, result.resultCode)
-                              putExtra(CaptionService.EXTRA_DATA, data)
-                          }
-                          ContextCompat.startForegroundService(this, intent)
-                          tvStatus.setText(R.string.status_running)
-                      } else {
-                          tvStatus.setText(R.string.status_denied)
-                      }
-                  }
-
-              private val permissionLauncher =
-                  registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-                      startCaptions()
+              private val pickVideo =
+                  registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+                      if (uri != null) startAnalysis(uri)
                   }
 
               override fun onCreate(savedInstanceState: Bundle?) {
@@ -446,397 +1245,214 @@ jobs:
                   setContentView(R.layout.activity_main)
 
                   tvStatus = findViewById(R.id.tvStatus)
+                  tvLog = findViewById(R.id.tvLog)
                   progress = findViewById(R.id.progress)
-                  btnPrepare = findViewById(R.id.btnPrepare)
+                  btnModels = findViewById(R.id.btnModels)
+                  btnPick = findViewById(R.id.btnPick)
+                  btnCancel = findViewById(R.id.btnCancel)
+                  btnOpen = findViewById(R.id.btnOpen)
 
-                  btnPrepare.setOnClickListener { prepareModels() }
-                  findViewById<Button>(R.id.btnStart).setOnClickListener { startCaptions() }
-                  findViewById<Button>(R.id.btnStop).setOnClickListener {
-                      stopService(Intent(this, CaptionService::class.java))
-                      tvStatus.setText(R.string.status_stopped)
-                  }
-
-                  if (ModelManager.voskReady(this)) tvStatus.setText(R.string.status_ready)
-              }
-
-              private fun prepareModels() {
-                  btnPrepare.isEnabled = false
-                  progress.visibility = View.VISIBLE
-                  progress.isIndeterminate = false
-                  progress.progress = 0
-
-                  Thread {
-                      try {
-                          if (!ModelManager.voskReady(this)) {
-                              ModelManager.downloadVosk(
-                                  this,
-                                  onProgress = { p ->
-                                      runOnUiThread {
-                                          progress.progress = p
-                                          tvStatus.text = getString(R.string.status_downloading_vosk, p)
-                                      }
-                                  },
-                                  onUnpacking = {
-                                      runOnUiThread {
-                                          progress.isIndeterminate = true
-                                          tvStatus.setText(R.string.status_unpacking)
-                                      }
-                                  }
-                              )
-                          }
-                          runOnUiThread {
-                              progress.isIndeterminate = true
-                              tvStatus.setText(R.string.status_downloading_translation)
-                          }
-                          ModelManager.downloadTranslation()
-                          runOnUiThread {
-                              progress.visibility = View.GONE
-                              btnPrepare.isEnabled = true
-                              tvStatus.setText(R.string.status_ready)
-                          }
-                      } catch (e: Exception) {
-                          runOnUiThread {
-                              progress.visibility = View.GONE
-                              btnPrepare.isEnabled = true
-                              tvStatus.text = getString(R.string.status_error, e.message ?: e.javaClass.simpleName)
-                          }
-                      }
-                  }.start()
-              }
-
-              private fun startCaptions() {
-                  if (!ModelManager.voskReady(this)) {
-                      tvStatus.setText(R.string.status_need_models)
-                      return
-                  }
-
-                  if (!Settings.canDrawOverlays(this)) {
-                      tvStatus.setText(R.string.status_need_overlay)
-                      startActivity(
-                          Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                  btnModels.setOnClickListener {
+                      ContextCompat.startForegroundService(
+                          this, Intent(this, JobService::class.java).setAction(JobService.ACTION_DOWNLOAD)
                       )
+                  }
+                  btnPick.setOnClickListener { pickVideo.launch(arrayOf("video/*")) }
+                  btnCancel.setOnClickListener {
+                      startService(Intent(this, JobService::class.java).setAction(JobService.ACTION_CANCEL))
+                  }
+                  btnOpen.setOnClickListener {
+                      startActivity(Intent(this, PlayerActivity::class.java))
+                  }
+              }
+
+              override fun onStart() {
+                  super.onStart()
+                  JobState.onChange = { render() }
+                  render()
+              }
+
+              override fun onStop() {
+                  JobState.onChange = null
+                  super.onStop()
+              }
+
+              private fun startAnalysis(uri: Uri) {
+                  if (!ModelManager.ready(this)) {
+                      Toast.makeText(this, "Baixe os modelos primeiro.", Toast.LENGTH_LONG).show()
                       return
+                  }
+                  try {
+                      contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                  } catch (ignored: Exception) {
+                  }
+                  val intent = Intent(this, JobService::class.java)
+                  intent.action = JobService.ACTION_ANALYZE
+                  intent.data = uri
+                  intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                  ContextCompat.startForegroundService(this, intent)
+              }
+
+              private fun render() {
+                  val busy = JobState.busy
+                  val ready = ModelManager.ready(this)
+
+                  val status = JobState.status
+                  tvStatus.text = when {
+                      status.isNotEmpty() -> status
+                      ready -> "Modelos prontos. Escolha um vídeo."
+                      else -> "Primeiro baixe os modelos (uma vez só, usa internet)."
                   }
 
-                  val needed = mutableListOf(Manifest.permission.RECORD_AUDIO)
-                  if (Build.VERSION.SDK_INT >= 33) needed += Manifest.permission.POST_NOTIFICATIONS
-                  val missing = needed.filter {
-                      ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-                  }
-                  if (missing.isNotEmpty() && !askedPermissions) {
-                      askedPermissions = true
-                      permissionLauncher.launch(missing.toTypedArray())
-                      return
-                  }
-                  // O microfone é exigido pelo Android mesmo para capturar o áudio interno
-                  if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
-                      != PackageManager.PERMISSION_GRANTED
-                  ) {
-                      tvStatus.setText(R.string.status_denied)
-                      return
-                  }
+                  val p = JobState.percent
+                  progress.visibility = if (busy) View.VISIBLE else View.GONE
+                  progress.isIndeterminate = p < 0
+                  if (p >= 0) progress.progress = p
 
-                  val manager = getSystemService(MediaProjectionManager::class.java)
-                  projectionLauncher.launch(manager.createScreenCaptureIntent())
+                  tvLog.text = JobState.log.joinToString("\n")
+
+                  btnModels.isEnabled = !busy && !ready
+                  btnPick.isEnabled = !busy && ready
+                  btnCancel.isEnabled = busy
+                  btnOpen.isEnabled = !busy && CueStore.exists(this)
               }
           }
           LEGENDAS_EOF_END
-          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasjp/CaptionService.kt')"
-          cat > 'app/src/main/java/com/example/legendasjp/CaptionService.kt' <<'LEGENDAS_EOF_END'
-          package com.example.legendasjp
+          mkdir -p "$(dirname 'app/src/main/java/com/example/legendasth/PlayerActivity.kt')"
+          cat > 'app/src/main/java/com/example/legendasth/PlayerActivity.kt' <<'LEGENDAS_EOF_END'
+          package com.example.legendasth
 
-          import android.app.Notification
-          import android.app.NotificationChannel
-          import android.app.NotificationManager
-          import android.app.PendingIntent
-          import android.app.Service
-          import android.content.Intent
-          import android.content.pm.ServiceInfo
-          import android.graphics.PixelFormat
-          import android.media.AudioAttributes
-          import android.media.AudioFormat
-          import android.media.AudioPlaybackCaptureConfiguration
-          import android.media.AudioRecord
-          import android.media.projection.MediaProjection
-          import android.media.projection.MediaProjectionManager
+          import android.net.Uri
+          import android.os.Bundle
           import android.os.Handler
-          import android.os.IBinder
           import android.os.Looper
-          import android.view.Gravity
-          import android.view.LayoutInflater
           import android.view.View
           import android.view.WindowManager
+          import android.widget.CheckBox
+          import android.widget.MediaController
           import android.widget.TextView
-          import androidx.core.app.NotificationCompat
-          import androidx.core.app.ServiceCompat
-          import androidx.core.content.IntentCompat
-          import com.google.android.gms.tasks.Tasks
-          import com.google.mlkit.common.model.DownloadConditions
-          import com.google.mlkit.nl.translate.TranslateLanguage
-          import com.google.mlkit.nl.translate.Translation
-          import com.google.mlkit.nl.translate.Translator
-          import com.google.mlkit.nl.translate.TranslatorOptions
-          import org.json.JSONObject
-          import org.vosk.Model
-          import org.vosk.Recognizer
+          import android.widget.Toast
+          import android.widget.VideoView
+          import androidx.appcompat.app.AppCompatActivity
 
-          /**
-           * Serviço em primeiro plano que:
-           *  1. captura o áudio que está tocando no aparelho (AudioPlaybackCapture),
-           *  2. reconhece a fala em japonês (Vosk, offline),
-           *  3. traduz para inglês (ML Kit, offline),
-           *  4. mostra a legenda numa janela sobre os outros apps.
-           */
-          class CaptionService : Service() {
+          /** Toca o vídeo e mostra por cima as legendas em inglês (e, se quiser, o tailandês). */
+          class PlayerActivity : AppCompatActivity() {
 
-              companion object {
-                  const val ACTION_START = "com.example.legendasjp.START"
-                  const val ACTION_STOP = "com.example.legendasjp.STOP"
-                  const val EXTRA_RESULT_CODE = "result_code"
-                  const val EXTRA_DATA = "projection_data"
+              private lateinit var video: VideoView
+              private lateinit var tvEn: TextView
+              private lateinit var tvTh: TextView
+              private lateinit var cbThai: CheckBox
 
-                  private const val CHANNEL_ID = "captions"
-                  private const val NOTIFICATION_ID = 1
-                  private const val SAMPLE_RATE = 16_000
-                  private const val CLEAR_AFTER_MS = 8_000L
+              private var cues: List<Cue> = emptyList()
+              private val handler = Handler(Looper.getMainLooper())
+
+              private val tick = object : Runnable {
+                  override fun run() {
+                      updateSubtitle()
+                      handler.postDelayed(this, 150)
+                  }
               }
 
-              private val main = Handler(Looper.getMainLooper())
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  setContentView(R.layout.activity_player)
+                  supportActionBar?.hide()
+                  window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-              private var projection: MediaProjection? = null
-              private var recorder: AudioRecord? = null
-              private var worker: Thread? = null
-              @Volatile private var active = false
+                  video = findViewById(R.id.video)
+                  tvEn = findViewById(R.id.tvEn)
+                  tvTh = findViewById(R.id.tvTh)
+                  cbThai = findViewById(R.id.cbThai)
 
-              private var translator: Translator? = null
+                  val saved = CueStore.load(this)
+                  if (saved == null || saved.cues.isEmpty()) {
+                      Toast.makeText(this, "Ainda não há legendas geradas.", Toast.LENGTH_LONG).show()
+                      finish()
+                      return
+                  }
+                  cues = Subtitles.expand(saved.cues)
 
-              private var windowManager: WindowManager? = null
-              private var overlay: View? = null
-              private var tvOriginal: TextView? = null
-              private var tvTranslated: TextView? = null
-
-              private val clearRunnable = Runnable {
-                  tvOriginal?.text = ""
-                  tvTranslated?.text = ""
-                  updateOverlayVisibility()
+                  val controller = MediaController(this)
+                  controller.setAnchorView(video)
+                  video.setMediaController(controller)
+                  video.setOnPreparedListener { video.start() }
+                  video.setOnErrorListener { _, _, _ ->
+                      Toast.makeText(
+                          this,
+                          "Não consegui tocar este vídeo aqui. Use os arquivos .srt em Downloads/LegendasTH com outro player.",
+                          Toast.LENGTH_LONG
+                      ).show()
+                      true
+                  }
+                  video.setVideoURI(Uri.parse(saved.videoUri))
               }
 
-              override fun onBind(intent: Intent?): IBinder? = null
+              override fun onResume() {
+                  super.onResume()
+                  handler.post(tick)
+              }
 
-              override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-                  if (intent == null || intent.action == ACTION_STOP) {
-                      stopSelf()
-                      return START_NOT_STICKY
+              override fun onPause() {
+                  handler.removeCallbacks(tick)
+                  if (::video.isInitialized) video.pause()
+                  super.onPause()
+              }
+
+              private fun updateSubtitle() {
+                  val cue = cueAt(video.currentPosition.toLong())
+                  if (cue == null) {
+                      tvEn.visibility = View.GONE
+                      tvTh.visibility = View.GONE
+                      return
                   }
-                  if (active) return START_NOT_STICKY
-
-                  // No Android 14+, o serviço precisa entrar em primeiro plano antes de usar a projeção
-                  startInForeground()
-
-                  val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
-                  val data = IntentCompat.getParcelableExtra(intent, EXTRA_DATA, Intent::class.java)
-                  if (data == null) {
-                      stopSelf()
-                      return START_NOT_STICKY
+                  if (cue.en.isEmpty()) {
+                      tvEn.visibility = View.GONE
+                  } else {
+                      tvEn.text = cue.en
+                      tvEn.visibility = View.VISIBLE
                   }
+                  if (cbThai.isChecked && cue.th.isNotEmpty()) {
+                      tvTh.text = cue.th
+                      tvTh.visibility = View.VISIBLE
+                  } else {
+                      tvTh.visibility = View.GONE
+                  }
+              }
 
-                  val manager = getSystemService(MediaProjectionManager::class.java)
-                  val mp = manager.getMediaProjection(resultCode, data)
-                  mp.registerCallback(object : MediaProjection.Callback() {
-                      override fun onStop() {
-                          stopSelf()
+              /** As legendas estão em ordem e sem sobreposição, então basta uma busca binária. */
+              private fun cueAt(ms: Long): Cue? {
+                  var lo = 0
+                  var hi = cues.size - 1
+                  while (lo <= hi) {
+                      val mid = (lo + hi) ushr 1
+                      val c = cues[mid]
+                      if (ms < c.startMs) {
+                          hi = mid - 1
+                      } else if (ms >= c.endMs) {
+                          lo = mid + 1
+                      } else {
+                          return c
                       }
-                  }, main)
-                  projection = mp
-
-                  showOverlay()
-                  startRecognition(mp)
-                  return START_NOT_STICKY
-              }
-
-              private fun startInForeground() {
-                  val nm = getSystemService(NotificationManager::class.java)
-                  nm.createNotificationChannel(
-                      NotificationChannel(
-                          CHANNEL_ID,
-                          getString(R.string.notif_channel),
-                          NotificationManager.IMPORTANCE_LOW
-                      )
-                  )
-                  val stopIntent = PendingIntent.getService(
-                      this, 0,
-                      Intent(this, CaptionService::class.java).setAction(ACTION_STOP),
-                      PendingIntent.FLAG_IMMUTABLE
-                  )
-                  val notification: Notification = NotificationCompat.Builder(this, CHANNEL_ID)
-                      .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                      .setContentTitle(getString(R.string.app_name))
-                      .setContentText(getString(R.string.notif_text))
-                      .setOngoing(true)
-                      .addAction(0, getString(R.string.stop), stopIntent)
-                      .build()
-                  ServiceCompat.startForeground(
-                      this, NOTIFICATION_ID, notification,
-                      ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                  )
-              }
-
-              private fun showOverlay() {
-                  val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-                  val view = LayoutInflater.from(this).inflate(R.layout.overlay_caption, null)
-                  tvOriginal = view.findViewById(R.id.tvOriginal)
-                  tvTranslated = view.findViewById(R.id.tvTranslated)
-                  tvTranslated?.text = getString(R.string.overlay_loading)
-
-                  val params = WindowManager.LayoutParams(
-                      WindowManager.LayoutParams.MATCH_PARENT,
-                      WindowManager.LayoutParams.WRAP_CONTENT,
-                      WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                          WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-                      PixelFormat.TRANSLUCENT
-                  ).apply {
-                      gravity = Gravity.BOTTOM
-                      y = (48 * resources.displayMetrics.density).toInt()
                   }
-                  wm.addView(view, params)
-                  windowManager = wm
-                  overlay = view
-              }
-
-              private fun updateOverlayVisibility() {
-                  val empty = tvOriginal?.text.isNullOrEmpty() && tvTranslated?.text.isNullOrEmpty()
-                  overlay?.visibility = if (empty) View.GONE else View.VISIBLE
-              }
-
-              private fun startRecognition(mp: MediaProjection) {
-                  active = true
-                  worker = Thread {
-                      var model: Model? = null
-                      var recognizer: Recognizer? = null
-                      try {
-                          model = Model(ModelManager.voskModelDir(this).absolutePath)
-
-                          val tr = Translation.getClient(
-                              TranslatorOptions.Builder()
-                                  .setSourceLanguage(TranslateLanguage.JAPANESE)
-                                  .setTargetLanguage(TranslateLanguage.ENGLISH)
-                                  .build()
-                          )
-                          translator = tr
-                          Tasks.await(tr.downloadModelIfNeeded(DownloadConditions.Builder().build()))
-
-                          val config = AudioPlaybackCaptureConfiguration.Builder(mp)
-                              .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                              .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                              .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
-                              .build()
-                          val format = AudioFormat.Builder()
-                              .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                              .setSampleRate(SAMPLE_RATE)
-                              .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                              .build()
-                          val minBuffer = AudioRecord.getMinBufferSize(
-                              SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
-                          )
-                          val rec = AudioRecord.Builder()
-                              .setAudioPlaybackCaptureConfig(config)
-                              .setAudioFormat(format)
-                              .setBufferSizeInBytes(maxOf(minBuffer, 4096) * 2)
-                              .build()
-                          recorder = rec
-
-                          recognizer = Recognizer(model, SAMPLE_RATE.toFloat())
-                          rec.startRecording()
-
-                          main.post {
-                              tvTranslated?.text = getString(R.string.overlay_listening)
-                              updateOverlayVisibility()
-                              main.postDelayed(clearRunnable, CLEAR_AFTER_MS)
-                          }
-
-                          val buffer = ShortArray(4096)
-                          while (active) {
-                              val n = rec.read(buffer, 0, buffer.size)
-                              if (n < 0) break
-                              if (n == 0) continue
-
-                              if (recognizer.acceptWaveForm(buffer, n)) {
-                                  val text = JSONObject(recognizer.result).optString("text")
-                                  onFinalText(text)
-                              } else {
-                                  val partial = JSONObject(recognizer.partialResult).optString("partial")
-                                  onPartialText(partial)
-                              }
-                          }
-                      } catch (t: Throwable) {
-                          if (active) {
-                              main.post {
-                                  tvOriginal?.text = ""
-                                  tvTranslated?.text = getString(R.string.overlay_error, t.message ?: t.javaClass.simpleName)
-                                  updateOverlayVisibility()
-                                  main.postDelayed({ stopSelf() }, 5_000)
-                              }
-                          }
-                      } finally {
-                          try { recorder?.stop() } catch (ignored: Throwable) {}
-                          try { recorder?.release() } catch (ignored: Throwable) {}
-                          recorder = null
-                          try { recognizer?.close() } catch (ignored: Throwable) {}
-                          try { model?.close() } catch (ignored: Throwable) {}
-                          try { translator?.close() } catch (ignored: Throwable) {}
-                          translator = null
-                      }
-                  }.also { it.start() }
-              }
-
-              /** O modelo japonês separa as palavras com espaços; para exibir e traduzir, junta tudo. */
-              private fun clean(text: String): String = text.replace(" ", "").trim()
-
-              private fun onPartialText(partial: String) {
-                  val jp = clean(partial)
-                  main.post {
-                      tvOriginal?.text = jp
-                      updateOverlayVisibility()
-                  }
-              }
-
-              private fun onFinalText(text: String) {
-                  val jp = clean(text)
-                  if (jp.isEmpty()) return
-                  val tr = translator ?: return
-                  tr.translate(jp)
-                      .addOnSuccessListener { english ->
-                          tvOriginal?.text = jp
-                          tvTranslated?.text = english
-                          updateOverlayVisibility()
-                          main.removeCallbacks(clearRunnable)
-                          main.postDelayed(clearRunnable, CLEAR_AFTER_MS)
-                      }
-              }
-
-              override fun onDestroy() {
-                  active = false
-                  main.removeCallbacksAndMessages(null)
-                  // Interrompe a leitura para a thread de trabalho terminar e liberar os recursos dela
-                  try { recorder?.stop() } catch (ignored: Throwable) {}
-                  overlay?.let { v ->
-                      try { windowManager?.removeView(v) } catch (ignored: Throwable) {}
-                  }
-                  overlay = null
-                  try { projection?.stop() } catch (ignored: Throwable) {}
-                  projection = null
-                  super.onDestroy()
+                  return null
               }
           }
           LEGENDAS_EOF_END
+
+      - name: Preparar certificado fixo e biblioteca de voz
+        working-directory: proj
+        run: |
+          base64 -d app/debug.keystore.b64 > app/debug.keystore
+          mkdir -p app/libs
+          curl -fL --retry 3 -o app/libs/sherpa-onnx-1.13.7.aar https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.7/sherpa-onnx-1.13.7.aar
+          ls -la app/libs app/debug.keystore
 
       - name: Aceitar licencas do Android SDK
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
 
       - name: Compilar o APK
         working-directory: proj
-        run: gradle assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon --stacktrace
 
       - name: Publicar o APK
         env:
@@ -845,5 +1461,5 @@ jobs:
         run: >
           gh release create "build-${{ github.run_number }}"
           proj/app/build/outputs/apk/debug/app-debug.apk
-          --title "Legendas JP-EN (build ${{ github.run_number }})"
+          --title "Legendas TH-EN (build ${{ github.run_number }})"
           --notes "Baixe o arquivo app-debug.apk e instale no celular."
